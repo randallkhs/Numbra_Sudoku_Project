@@ -1,0 +1,6 @@
+{
+  "name": "Numbra: Premium Sudoku",
+  "description": "A luxury, highly animated Sudoku game designed specifically for mobile devices with interactive elements and surprises.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

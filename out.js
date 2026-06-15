@@ -1,0 +1,18 @@
+const fs = require("fs");
+let css = fs.readFileSync("src/index.css", "utf8");
+css = css.replace(/--bg-start:/g, "--color-game-bg-start:");
+css = css.replace(/--bg-end:/g, "--color-game-bg-end:");
+css = css.replace(/--text-primary:/g, "--color-game-text-primary:");
+css = css.replace(/--text-secondary:/g, "--color-game-text-secondary:");
+css = css.replace(/--accent-start:/g, "--color-game-accent-start:");
+css = css.replace(/--accent-end:/g, "--color-game-accent-end:");
+css = css.replace(/--accent-light:/g, "--color-game-accent-light:");
+css = css.replace(/--accent-subtle:/g, "--color-game-accent-subtle:");
+css = css.replace(/--surface:/g, "--color-game-surface:");
+css = css.replace(/--surface-hover:/g, "--color-game-surface-hover:");
+css = css.replace(/--border:/g, "--color-game-border:");
+css = css.replace(/--border-strong:/g, "--color-game-border-strong:");
+css = css.replace(/--error:/g, "--color-game-error:");
+css = css.replace(/--error-bg:/g, "--color-game-error-bg:");
+css = css.replace(/var\(--color-game-(.+?)\)/g, "#000");
+fs.writeFileSync("src/index.css", css);

@@ -1,0 +1,181 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+
+  --color-game-bg-start: var(--color-game-bg-start, #000);
+  --color-game-bg-end: var(--color-game-bg-end, #000);
+  --color-game-text-primary: var(--color-game-text-primary, #fff);
+  --color-game-text-secondary: var(--color-game-text-secondary, #888);
+  --color-game-accent-start: var(--color-game-accent-start, #f00);
+  --color-game-accent-end: var(--color-game-accent-end, #0f0);
+  --color-game-accent-light: var(--color-game-accent-light, #f00);
+  --color-game-accent-subtle: var(--color-game-accent-subtle, rgba(0,0,0,0.1));
+  --color-game-surface: var(--color-game-surface, rgba(0,0,0,0.2));
+  --color-game-surface-hover: var(--color-game-surface-hover, rgba(0,0,0,0.3));
+  --color-game-border: var(--color-game-border, rgba(0,0,0,0.5));
+  --color-game-border-strong: var(--color-game-border-strong, #000);
+  --color-game-error: var(--color-game-error, #f00);
+  --color-game-error-bg: var(--color-game-error-bg, #f00);
+}
+
+:root, .theme-cosmic {
+  --color-game-bg-start: #0d0d12;
+  --color-game-bg-end: #161621;
+  --color-game-text-primary: #ffffff;
+  --color-game-text-secondary: #888888;
+  --color-game-accent-start: #4f46e5;
+  --color-game-accent-end: #7c3aed;
+  --color-game-accent-light: #818cf8;
+  --color-game-accent-subtle: rgba(79, 70, 229, 0.15);
+  --color-game-surface: rgba(255, 255, 255, 0.03);
+  --color-game-surface-hover: rgba(255, 255, 255, 0.08);
+  --color-game-border: rgba(255, 255, 255, 0.05);
+  --color-game-border-strong: rgba(255, 255, 255, 0.2);
+  --color-game-error: #f87171;
+  --color-game-error-bg: rgba(248, 113, 113, 0.2);
+}
+
+.theme-cyber {
+  --color-game-bg-start: #050a0a;
+  --color-game-bg-end: #001111;
+  --color-game-text-primary: #00ffcc;
+  --color-game-text-secondary: #008877;
+  --color-game-accent-start: #ff00ff;
+  --color-game-accent-end: #00ffff;
+  --color-game-accent-light: #ff66ff;
+  --color-game-accent-subtle: rgba(255, 0, 255, 0.15);
+  --color-game-surface: rgba(0, 255, 204, 0.05);
+  --color-game-surface-hover: rgba(0, 255, 204, 0.15);
+  --color-game-border: rgba(0, 255, 204, 0.2);
+  --color-game-border-strong: rgba(0, 255, 204, 0.5);
+  --color-game-error: #ff3333;
+  --color-game-error-bg: rgba(255, 51, 51, 0.2);
+}
+
+.theme-paper {
+  --color-game-bg-start: #fdfdfc;
+  --color-game-bg-end: #f4f4f0;
+  --color-game-text-primary: #333333;
+  --color-game-text-secondary: #888888;
+  --color-game-accent-start: #ef4444;
+  --color-game-accent-end: #b91c1c;
+  --color-game-accent-light: #f87171;
+  --color-game-accent-subtle: rgba(239, 68, 68, 0.1);
+  --color-game-surface: rgba(0, 0, 0, 0.03);
+  --color-game-surface-hover: rgba(0, 0, 0, 0.08);
+  --color-game-border: rgba(0, 0, 0, 0.1);
+  --color-game-border-strong: rgba(0, 0, 0, 0.3);
+  --color-game-error: #dc2626;
+  --color-game-error-bg: rgba(220, 38, 38, 0.1);
+}
+
+.theme-neon {
+  --color-game-bg-start: #1a002a;
+  --color-game-bg-end: #0d0014;
+  --color-game-text-primary: #ffe6ff;
+  --color-game-text-secondary: #b366ff;
+  --color-game-accent-start: #ff007f;
+  --color-game-accent-end: #7f00ff;
+  --color-game-accent-light: #ff66b2;
+  --color-game-accent-subtle: rgba(255, 0, 127, 0.2);
+  --color-game-surface: rgba(255, 255, 255, 0.05);
+  --color-game-surface-hover: rgba(255, 255, 255, 0.1);
+  --color-game-border: rgba(255, 0, 127, 0.3);
+  --color-game-border-strong: rgba(255, 0, 127, 0.7);
+  --color-game-error: #ff5500;
+  --color-game-error-bg: rgba(255, 85, 0, 0.3);
+}
+
+.theme-glitch {
+  --color-game-bg-start: #000000;
+  --color-game-bg-end: #1a1a1a;
+  --color-game-text-primary: #00ff00;
+  --color-game-text-secondary: #ff00ff;
+  --color-game-accent-start: #ff003c;
+  --color-game-accent-end: #00f0ff;
+  --color-game-accent-light: #fcee0a;
+  --color-game-accent-subtle: rgba(0, 240, 255, 0.2);
+  --color-game-surface: rgba(255, 255, 255, 0.02);
+  --color-game-surface-hover: rgba(255, 255, 255, 0.1);
+  --color-game-border: #ff003c;
+  --color-game-border-strong: #00f0ff;
+  --color-game-error: #ffeb3b;
+  --color-game-error-bg: rgba(255, 235, 59, 0.2);
+  animation: glitch-bg 4s infinite alternate;
+}
+
+@keyframes glitch-bg {
+  0% { filter: hue-rotate(0deg); }
+  100% { filter: hue-rotate(10deg); }
+}
+
+.theme-disco {
+  --color-game-bg-start: #230046;
+  --color-game-bg-end: #001242;
+  --color-game-text-primary: #ffff00;
+  --color-game-text-secondary: #00ffff;
+  --color-game-accent-start: #ff00aa;
+  --color-game-accent-end: #00ffaa;
+  --color-game-accent-light: #ffaa00;
+  --color-game-accent-subtle: rgba(255, 0, 170, 0.2);
+  --color-game-surface: rgba(255, 255, 255, 0.1);
+  --color-game-surface-hover: rgba(255, 255, 255, 0.2);
+  --color-game-border: rgba(0, 255, 170, 0.5);
+  --color-game-border-strong: rgba(255, 0, 170, 0.8);
+  --color-game-error: #ff0000;
+  --color-game-error-bg: rgba(255, 0, 0, 0.3);
+}
+
+.theme-mechanic {
+  --color-game-bg-start: #1c1c1c;
+  --color-game-bg-end: #0a0a0a;
+  --color-game-text-primary: #e0e0e0;
+  --color-game-text-secondary: #8c8c8c;
+  --color-game-accent-start: #ff4500;
+  --color-game-accent-end: #ff8c00;
+  --color-game-accent-light: #ffd700;
+  --color-game-accent-subtle: rgba(255, 69, 0, 0.2);
+  --color-game-surface: rgba(255, 255, 255, 0.05);
+  --color-game-surface-hover: rgba(255, 255, 255, 0.1);
+  --color-game-border: rgba(255, 69, 0, 0.3);
+  --color-game-border-strong: rgba(255, 69, 0, 0.7);
+  --color-game-error: #ff0000;
+  --color-game-error-bg: rgba(255, 0, 0, 0.3);
+}
+
+.theme-cartoon {
+  --color-game-bg-start: #fff176;
+  --color-game-bg-end: #ffb74d;
+  --color-game-text-primary: #212121;
+  --color-game-text-secondary: #5d4037;
+  --color-game-accent-start: #e91e63;
+  --color-game-accent-end: #9c27b0;
+  --color-game-accent-light: #03a9f4;
+  --color-game-accent-subtle: rgba(233, 30, 99, 0.3);
+  --color-game-surface: rgba(255, 255, 255, 0.4);
+  --color-game-surface-hover: rgba(255, 255, 255, 0.6);
+  --color-game-border: rgba(0, 0, 0, 0.3);
+  --color-game-border-strong: rgba(0, 0, 0, 0.6);
+  --color-game-error: #f44336;
+  --color-game-error-bg: rgba(244, 67, 54, 0.4);
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-4px); }
+  50% { transform: translateX(4px); }
+  75% { transform: translateX(-4px); }
+}
+
+@keyframes bloom {
+  0% { box-shadow: 0 0 0px 0px var(--color-game-accent-start); background: var(--color-game-surface); }
+  50% { box-shadow: 0 0 30px 5px var(--color-game-accent-start); background: var(--color-game-accent-subtle); z-index: 10; }
+  100% { box-shadow: 0 0 0px 0px var(--color-game-accent-start); background: var(--color-game-surface); }
+}
+
+.animate-bloom {
+  animation: bloom 1s ease-in-out;
+}
