@@ -34,9 +34,10 @@ async function startServer() {
       });
       
       res.json({ text: response.text });
-    } catch (error) {
-      console.error(error);
-      res.status(500).json({ error: 'AI failed to comment' });
+    } catch (error: any) {
+      console.error('Gemini API Error:', error?.message || error);
+      // Fallback response for 503 high demand or other errors
+      res.json({ text: "IA temporalmente ocupada recargando inteligencia cósmica. ¡Sigue jugando!" });
     }
   });
 
@@ -68,9 +69,9 @@ async function startServer() {
       });
       
       res.json({ text: response.text });
-    } catch (error) {
-      console.error(error);
-      res.status(500).json({ error: 'AI hint failed' });
+    } catch (error: any) {
+      console.error('Gemini API Error (Hint):', error?.message || error);
+      res.json({ text: "Los astros están nublados, no puedo ver una pista clara ahora mismo. ¡Tú puedes hacerlo!" });
     }
   });
 
