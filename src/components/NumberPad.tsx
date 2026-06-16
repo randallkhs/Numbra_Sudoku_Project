@@ -7,8 +7,9 @@ export const NumberPad: React.FC = () => {
   const inputNumber = useGameStore(state => state.inputNumber);
   const isPaused = useGameStore(state => state.isPaused);
   const isWon = useGameStore(state => state.isWon);
+  const isScanning = useGameStore(state => state.isScanning);
 
-  const disabled = isPaused || isWon;
+  const disabled = isPaused || isWon || isScanning;
 
   return (
     <motion.div 

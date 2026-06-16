@@ -1,0 +1,37 @@
+{
+  "entities": {
+    "UserSettings": {
+      "title": "UserSettings",
+      "description": "User preferences and settings.",
+      "type": "object",
+      "properties": {
+        "theme": { "type": "string" },
+        "soundEnabled": { "type": "boolean" },
+        "hapticsEnabled": { "type": "boolean" },
+        "aiEnabled": { "type": "boolean" }
+      }
+    },
+    "GameState": {
+      "title": "GameState",
+      "description": "User's current game state.",
+      "type": "object",
+      "properties": {
+        "board": { "type": "array" },
+        "solution": { "type": "array" },
+        "difficulty": { "type": "string" },
+        "mistakes": { "type": "number" },
+        "timeElapsed": { "type": "number" }
+      }
+    }
+  },
+  "firestore": {
+    "users/{userId}/settings/{docId}": {
+      "schema": "UserSettings",
+      "description": "Stores user settings"
+    },
+    "users/{userId}/gameState/{docId}": {
+      "schema": "GameState",
+      "description": "Stores current game state"
+    }
+  }
+}

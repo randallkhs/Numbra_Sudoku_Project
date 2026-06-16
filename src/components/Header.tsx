@@ -3,7 +3,9 @@ import { motion, AnimatePresence } from 'motion/react';
 import { useGameStore } from '../store/gameStore';
 import { Difficulty } from '../lib/sudoku';
 import { cn } from '../lib/utils';
-import { Volume2, VolumeX, Vibrate, VibrateOff, Settings, X, Palette, BarChart2, Sparkles } from 'lucide-react';
+import { Volume2, VolumeX, Vibrate, VibrateOff, Settings, X, Palette, BarChart2, Sparkles, User, LogOut } from 'lucide-react';
+import { auth, loginWithGoogle, logoutUser } from '../lib/firebase';
+import { onAuthStateChanged } from 'firebase/auth';
 
 export function Header() {
   const { mistakes, timeElapsed, difficulty, startNewGame, isPlaying, isPaused, tickTimer, toggleStats } = useGameStore();
@@ -93,7 +95,13 @@ export function Header() {
 }
 
 function SettingsMenu({ onClose }: { onClose: () => void }) {
-  const { soundEnabled, toggleSound, hapticsEnabled, toggleHaptics, theme, setTheme, aiEnabled, toggleAI } = useGameStore();
+  const { soundEnabled, toggleSound, hapticsEnabled, toggleHaptics, hapticIntensity, setHapticIntensity, theme, setTheme, aiEnabled, toggleAI } = useGameStore();
+
+  const [user, setUser] = useState(auth.currentUser);
+
+  useEffect(() => {
+    return onAuthStateChanged(auth, setUser);
+  }, []);
 
   const themes: { id: any, name: string, colors: string }[] = [
     { id: 'cosmic', name: 'Cosmic', colors: 'from-[#0d0d12] to-[#4f46e5]' },
@@ -123,6 +131,36 @@ function SettingsMenu({ onClose }: { onClose: () => void }) {
         </button>
       </div>
 
+      {!user ? (
+        <div className="flex flex-col gap-2 items-center text-center p-3 rounded-2xl bg-game-surface border border-game-border">
+          <User size={24} className="text-game-text-secondary" />
+          <p className="text-xs text-game-text-secondary font-medium px-2">Login to backup your game state and themes across sessions.</p>
+          <button 
+            onClick={loginWithGoogle}
+            className="mt-1 w-full bg-white text-black py-2 rounded-xl text-xs font-bold font-sans uppercase tracking-wider hover:bg-gray-100 transition-colors"
+          >
+            Google Login
+          </button>
+        </div>
+      ) : (
+        <div className="flex items-center justify-between p-3 rounded-2xl bg-game-surface border border-game-border">
+          <div className="flex items-center gap-3 overflow-hidden">
+            <img src={user.photoURL || ''} alt="avatar" className="w-8 h-8 rounded-full bg-gray-800" />
+            <div className="flex flex-col max-w-[150px]">
+              <span className="text-xs font-bold text-white truncate">{user.displayName}</span>
+              <span className="text-[10px] text-game-text-secondary truncate">{user.email}</span>
+            </div>
+          </div>
+          <button 
+            onClick={logoutUser}
+            className="w-8 h-8 rounded-full flex items-center justify-center bg-game-surface-hover text-game-text-secondary hover:text-white transition-colors"
+            title="Logout"
+          >
+            <LogOut size={14} />
+          </button>
+        </div>
+      )}
+
       <div className="flex flex-col gap-4">
         <div className="flex justify-between items-center">
           <span className="text-sm font-medium text-gray-200">Sound Effects</span>
@@ -134,14 +172,42 @@ function SettingsMenu({ onClose }: { onClose: () => void }) {
           </button>
         </div>
 
-        <div className="flex justify-between items-center">
-          <span className="text-sm font-medium text-gray-200">Haptics (Vibration)</span>
-          <button 
-            onClick={toggleHaptics}
-            className={cn("w-12 h-12 rounded-full flex items-center justify-center transition-all shadow-lg", hapticsEnabled ? "bg-game-accent-start text-white" : "bg-game-surface text-gray-400")}
-          >
-            {hapticsEnabled ? <Vibrate size={20} /> : <VibrateOff size={20} />}
-          </button>
+        <div className="flex flex-col gap-2">
+          <div className="flex justify-between items-center">
+            <span className="text-sm font-medium text-gray-200">Haptics (Vibration)</span>
+            <button 
+              onClick={toggleHaptics}
+              className={cn("w-12 h-12 rounded-full flex items-center justify-center transition-all shadow-lg", hapticsEnabled ? "bg-game-accent-start text-white" : "bg-game-surface text-gray-400")}
+            >
+              {hapticsEnabled ? <Vibrate size={20} /> : <VibrateOff size={20} />}
+            </button>
+          </div>
+          
+          <AnimatePresence>
+            {hapticsEnabled && (
+              <motion.div 
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                exit={{ opacity: 0, height: 0 }}
+                className="flex items-center gap-2 overflow-hidden justify-end"
+              >
+                {(['low', 'medium', 'high'] as const).map(intensity => (
+                  <button
+                    key={intensity}
+                    onClick={() => setHapticIntensity(intensity)}
+                    className={cn(
+                      "px-3 py-1.5 rounded-full text-xs font-semibold uppercase tracking-wider transition-colors border",
+                      hapticIntensity === intensity 
+                        ? "bg-game-surface-hover text-white border-game-accent-start" 
+                        : "bg-transparent text-game-text-secondary border-game-border hover:text-white"
+                    )}
+                  >
+                    {intensity}
+                  </button>
+                ))}
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
 
         <div className="flex justify-between items-center">

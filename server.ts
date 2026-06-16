@@ -13,13 +13,18 @@ async function startServer() {
   app.post('/api/ai/comment', async (req, res) => {
     try {
       const { prompt, context } = req.body;
+      const safePrompt = String(prompt).slice(0, 500);
       const themeDetail = context?.theme === 'mechanic' ? 'Usa bromas, rimas o comentarios graciosos sobre autos, talleres mecánicos, chatarra, grasa de motor o piezas no funcionando.' :
                           context?.theme === 'cartoon' ? 'Usa bromas, rimas o analogías loquísimas de dibujos animados, caricaturas, caer por acantilados, yunques, o personajes ridículos.' : '';
       
+      if (!process.env.GEMINI_API_KEY) {
+        return res.json({ text: "Ups, la IA cósmica está apagada (Falta GEMINI_API_KEY)" });
+      }
+      
       const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
       const response = await ai.models.generateContent({
-        model: 'gemini-1.5-flash',
-        contents: prompt,
+        model: 'gemini-2.5-flash',
+        contents: safePrompt,
         config: {
           systemInstruction: `Eres un comentarista de IA sarcástico, burlón y súper divertido dentro de un juego de Sudoku. El jugador está en dificultad: ${context?.difficulty}. El tema visual es ${context?.theme || 'normal'}. 
           ${themeDetail}
@@ -37,14 +42,26 @@ async function startServer() {
 
   app.post('/api/ai/hint', async (req, res) => {
     try {
-      const { grid, theme } = req.body;
+      const { grid, theme, difficulty } = req.body;
       const themeDetail = theme === 'mechanic' ? 'Usa analogías de autos, motores o piezas.' :
                           theme === 'cartoon' ? 'Usa analogías de dibujos animados, yunques, y explosiones chistosas.' : 'acertijo cósmico o una burla sarcástica';
       
+      const strategyGuide = difficulty === 'easy' ? 'Hidden singles, Naked singles (casillas con una sola opción).' :
+                            difficulty === 'medium' ? 'Naked pairs o Hidden pairs, y bloqueos de fila/columna.' :
+                            difficulty === 'hard' ? 'Técnicas avanzadas como X-Wing, Y-Wing o Swordfish.' :
+                            'Cadenas complejas, Forcing Chains, XYZ-Wing. Explica la técnica como el gran maestro absoluto.';
+
+      if (!process.env.GEMINI_API_KEY) {
+        return res.json({ text: "Ups, mi cerebro está desconectado (Falta GEMINI_API_KEY)." });
+      }
+
+      // Defensive limit
+      const gridString = JSON.stringify(grid).slice(0, 1000);
+
       const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
       const response = await ai.models.generateContent({
-        model: 'gemini-1.5-flash',
-        contents: `Aquí hay un Sudoku (0 es vacío). Da una pista útil pero súper misteriosa, loca y divertida en ESPAÑOL sin dar el número exacto, guiando a la persona a la celda correcta. Inventa palabras o expresiones divertidas, rimas o analogías loquísimas pero aptas para todo público. Enmárcalo como ${themeDetail}. Máximo 20 palabras.\n\nGrid:\n${JSON.stringify(grid)}`,
+        model: 'gemini-2.5-flash',
+        contents: `Aquí hay un Sudoku (0 es vacío). Da una pista estratégica útil ("Strategic Tip") explicando UNA técnica de resolución aplicable a la dificultad de este jugador: ${difficulty} (ej: ${strategyGuide}) en ESPAÑOL y guiándolo sin decirle exactamente qué número va dónde. Inventa palabras o expresiones divertidas, rimas o analogías loquísimas pero aptas para todo público. Enmárcalo como ${themeDetail}. Máximo 25 palabras.\n\nGrid:\n${gridString}`,
         config: {
           temperature: 0.9,
         }

@@ -1,51 +1,33 @@
 export const haptic = {
   enabled: true,
-  light: (difficulty: string = 'easy') => {
-    try {
-      if (haptic.enabled && typeof navigator !== 'undefined' && navigator.vibrate) {
-        let amt = 10;
-        if(difficulty === 'medium') amt = 15;
-        if(difficulty === 'hard') amt = 20;
-        if(difficulty === 'expert') amt = 30;
-        navigator.vibrate(amt);
-      }
-    } catch (e) {}
+  intensity: 'medium' as 'low' | 'medium' | 'high',
+  
+  getScale: () => {
+    switch(haptic.intensity) {
+      case 'low': return 0.5;
+      case 'high': return 2.0;
+      default: return 1.0;
+    }
   },
-  medium: (difficulty: string = 'easy') => {
+
+  vibrateScaled: (val: number | number[]) => {
+    if (!haptic.enabled || typeof navigator === 'undefined' || !navigator.vibrate) return;
     try {
-      if (haptic.enabled && typeof navigator !== 'undefined' && navigator.vibrate) {
-        let amt = 20;
-        if(difficulty === 'medium') amt = 30;
-        if(difficulty === 'hard') amt = 40;
-        if(difficulty === 'expert') amt = 60;
-        navigator.vibrate(amt);
+      const scale = haptic.getScale();
+      if (Array.isArray(val)) {
+        navigator.vibrate(val.map(v => Math.max(1, Math.round(v * scale))));
+      } else {
+        navigator.vibrate(Math.max(1, Math.round(val * scale)));
       }
-    } catch (e) {}
+    } catch(e) {}
   },
-  heavy: (difficulty: string = 'easy') => {
-    try {
-      if (haptic.enabled && typeof navigator !== 'undefined' && navigator.vibrate) {
-        let amt = 30;
-        if(difficulty === 'medium') amt = 45;
-        if(difficulty === 'hard') amt = 60;
-        if(difficulty === 'expert') amt = 90;
-        navigator.vibrate(amt);
-      }
-    } catch (e) {}
-  },
-  success: () => {
-    try {
-      if (haptic.enabled && typeof navigator !== 'undefined' && navigator.vibrate) {
-        navigator.vibrate([20, 50, 30, 50, 40]);
-      }
-    } catch (e) {}
-  },
-  error: () => {
-    try {
-      if (haptic.enabled && typeof navigator !== 'undefined' && navigator.vibrate) {
-        navigator.vibrate([30, 40, 30, 40, 40]);
-      }
-    } catch (e) {}
-  }
+
+  // Premium subtle pulses
+  light: () => haptic.vibrateScaled(10),
+  medium: () => haptic.vibrateScaled(15),
+  heavy: () => haptic.vibrateScaled(25),
+  success: () => haptic.vibrateScaled([15, 30, 20, 30, 15]),
+  error: () => haptic.vibrateScaled([40, 30, 40])
 };
+
 

@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useGameStore } from './store/gameStore';
 import { Board } from './components/Board';
 import { Controls } from './components/Controls';
@@ -16,10 +16,14 @@ import { cn } from './lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 
 import { loadSnarks, saveSnark, getRandomSnark } from './lib/aiCache';
+import { clearSavedGame } from './lib/gameStateCache';
+import { onAuthStateChanged } from 'firebase/auth';
+import { auth } from './lib/firebase';
 
 export default function App() {
   const startNewGame = useGameStore(state => state.startNewGame);
   const loadSavedGameOrStartNew = useGameStore(state => state.loadSavedGameOrStartNew);
+  const syncSettings = useGameStore(state => state.syncSettings);
   const inputNumber = useGameStore(state => state.inputNumber);
   const isPlaying = useGameStore(state => state.isPlaying);
   const isPaused = useGameStore(state => state.isPaused);
@@ -30,6 +34,16 @@ export default function App() {
   const board = useGameStore(state => state.board);
   const theme = useGameStore(state => state.theme);
   const aiEnabled = useGameStore(state => state.aiEnabled);
+
+  const [authReady, setAuthReady] = useState(false);
+
+  useEffect(() => {
+    return onAuthStateChanged(auth, async (user) => {
+      await syncSettings(user);
+      await loadSavedGameOrStartNew();
+      setAuthReady(true);
+    });
+  }, [syncSettings, loadSavedGameOrStartNew]);
 
   useEffect(() => {
     // Apply the theme to the root element so CSS variables cascade properly for everything including modals/absolute positioned elements
@@ -81,12 +95,6 @@ export default function App() {
   }, [isPlaying, isPaused, difficulty, board, selectedCell, theme, aiEnabled]);
 
   useEffect(() => {
-    if (!isPlaying) {
-      loadSavedGameOrStartNew();
-    }
-  }, [isPlaying, loadSavedGameOrStartNew]);
-
-  useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (!isPlaying || isPaused) return;
 
@@ -108,6 +116,10 @@ export default function App() {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isPlaying, isPaused, inputNumber, eraseCell, selectedCell, selectCell]);
+
+  if (!authReady) {
+    return <div className={`fixed inset-0 theme-${theme} bg-game-bg-start`} />;
+  }
 
   return (
     <div className={cn(

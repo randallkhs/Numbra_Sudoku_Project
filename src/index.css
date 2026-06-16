@@ -179,3 +179,12 @@
 .animate-bloom {
   animation: bloom 1s ease-in-out;
 }
+
+@keyframes crosshair-pulse {
+  0%, 100% { background-color: var(--color-game-surface); }
+  50% { background-color: var(--color-game-surface-hover); }
+}
+
+.animate-crosshair {
+  animation: crosshair-pulse 2s ease-in-out infinite;
+}

@@ -1,11 +1,11 @@
 import { motion } from 'motion/react';
 import { useGameStore } from '../store/gameStore';
-import { Pencil, Eraser, RotateCcw, Play, Pause, Sparkles } from 'lucide-react';
+import { Pencil, Eraser, RotateCcw, Play, Pause, Sparkles, Lightbulb } from 'lucide-react';
 import { cn } from '../lib/utils';
 import React, { useState } from 'react';
 
 export const Controls: React.FC = () => {
-  const { notesMode, toggleNotesMode, eraseCell, isPaused, togglePause, startNewGame, difficulty, board, theme, aiEnabled } = useGameStore();
+  const { notesMode, toggleNotesMode, eraseCell, isPaused, togglePause, startNewGame, difficulty, board, theme, aiEnabled, revealHint, isScanning } = useGameStore();
   const [loadingHint, setLoadingHint] = useState(false);
 
   const getAIHint = async () => {
@@ -16,7 +16,7 @@ export const Controls: React.FC = () => {
       const res = await fetch('/api/ai/hint', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ grid: simplifiedGrid, theme })
+        body: JSON.stringify({ grid: simplifiedGrid, theme, difficulty })
       });
       const data = await res.json();
       if (data.text) {
@@ -48,6 +48,12 @@ export const Controls: React.FC = () => {
         icon={<Eraser size={24} />} 
         label="Erase" 
         onClick={eraseCell} 
+      />
+      <ControlButton 
+        icon={<Lightbulb size={24} className={isScanning ? "animate-pulse text-amber-300" : ""} />} 
+        label="Reveal" 
+        onClick={revealHint} 
+        isActive={isScanning}
       />
       {aiEnabled && (
         <ControlButton 

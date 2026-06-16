@@ -13,6 +13,14 @@ interface CellProps {
 export const Cell: React.FC<CellProps> = ({ row, col, delayIndex, triggerBloom }) => {
   const cellState = useGameStore(state => state.board[row][col]);
   const selectedCell = useGameStore(state => state.selectedCell);
+  const scanningCell = useGameStore(state => state.scanningCell);
+  
+  // Reactively track the selected cell's value so same-value highlighting updates dynamically
+  const selectedCellValue = useGameStore(state => {
+    if (!state.selectedCell) return null;
+    return state.board[state.selectedCell[0]][state.selectedCell[1]].value;
+  });
+
   const selectCell = useGameStore(state => state.selectCell);
   const [bloom, setBloom] = useState(false);
   
@@ -28,10 +36,15 @@ export const Cell: React.FC<CellProps> = ({ row, col, delayIndex, triggerBloom }
   let isSelected = false;
   let isRelated = false;
   let isSameValue = false;
+  let isScanned = false;
   
-  if (selectedCell) {
+  if (scanningCell) {
+    isScanned = scanningCell[0] === row && scanningCell[1] === col;
+  }
+  
+  if (selectedCell && !isScanned) {
     const [sRow, sCol] = selectedCell;
-    const sValue = useGameStore.getState().board[sRow]?.[sCol]?.value;
+    const sValue = selectedCellValue;
     
     isSelected = sRow === row && sCol === col;
     
@@ -60,18 +73,19 @@ export const Cell: React.FC<CellProps> = ({ row, col, delayIndex, triggerBloom }
         borderClasses,
         bloom && 'animate-bloom',
         cellState.isError ? 'bg-game-error-bg text-game-error' : 
+        isScanned ? 'bg-white shadow-[0_0_20px_white] z-50 transition-none scale-105 duration-75' :
         isSelected ? 'bg-gradient-to-br from-game-accent-start/40 to-game-accent-end/40 text-white shadow-[inset_0_0_12px_var(--color-game-accent-start)] z-10 border-game-accent-light' :
         isSameValue ? 'bg-game-accent-subtle text-game-accent-light z-0' :
-        isRelated ? 'bg-game-surface z-0' : 'hover:bg-game-surface-hover z-0',
+        isRelated ? 'bg-game-surface animate-crosshair z-0' : 'hover:bg-game-surface-hover z-0',
         cellState.isInitial ? 'text-game-text-primary font-semibold' : 'text-game-accent-light font-light'
       )}
     >
       {cellState.value !== 0 ? (
         <motion.span
           key={`${row}-${col}-${cellState.value}`}
-          initial={!cellState.isInitial ? { scale: 0, opacity: 0 } : false}
+          initial={!cellState.isInitial ? { scale: 0.5, opacity: 0 } : false}
           animate={{ scale: 1, opacity: 1 }}
-          transition={{ type: 'spring', stiffness: 300, damping: 20 }}
+          transition={{ type: 'spring', stiffness: 500, damping: 15, mass: 1 }}
           className={cn(
             cellState.isError && 'animate-[shake_0.4s_ease-in-out]'
           )}

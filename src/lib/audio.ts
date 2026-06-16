@@ -74,21 +74,30 @@ class SubtleAudio {
 
     const osc = this.ctx.createOscillator();
     const gain = this.ctx.createGain();
+    const filter = this.ctx.createBiquadFilter();
     
     osc.type = oscType;
     osc.frequency.setValueAtTime(baseFreq, this.ctx.currentTime);
-    osc.frequency.exponentialRampToValueAtTime(baseFreq/2, this.ctx.currentTime + 0.05);
+    // Subtle pitch drop
+    osc.frequency.exponentialRampToValueAtTime(baseFreq * 0.9, this.ctx.currentTime + 0.1);
     
-    const startGain = (oscType === 'square' || oscType === 'sawtooth') ? 0.02 : 0.05;
+    // Low-pass filter to round off harsh frequencies
+    filter.type = 'lowpass';
+    filter.frequency.setValueAtTime(baseFreq * 2, this.ctx.currentTime);
     
-    gain.gain.setValueAtTime(startGain, this.ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.05);
+    const startGain = (oscType === 'square' || oscType === 'sawtooth') ? 0.015 : 0.04;
     
-    osc.connect(gain);
+    // Sharp attack, gentle exponential decay for a 'plop'/'marimba' sound
+    gain.gain.setValueAtTime(0, this.ctx.currentTime);
+    gain.gain.linearRampToValueAtTime(startGain, this.ctx.currentTime + 0.005);
+    gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.1);
+    
+    osc.connect(filter);
+    filter.connect(gain);
     gain.connect(this.ctx.destination);
     
     osc.start();
-    osc.stop(this.ctx.currentTime + 0.05);
+    osc.stop(this.ctx.currentTime + 0.1);
   }
 
   playError(difficulty: string = 'easy') {
@@ -134,17 +143,24 @@ class SubtleAudio {
 
     const osc = this.ctx.createOscillator();
     const gain = this.ctx.createGain();
+    const filter = this.ctx.createBiquadFilter();
     
     osc.type = oscType;
     osc.frequency.setValueAtTime(baseFreq, this.ctx.currentTime);
-    osc.frequency.linearRampToValueAtTime(baseFreq-50, this.ctx.currentTime + 0.2);
+    osc.frequency.linearRampToValueAtTime(baseFreq * 0.8, this.ctx.currentTime + 0.2);
     
-    const startGain = (oscType === 'square' || oscType === 'sawtooth') ? 0.03 : 0.05;
+    filter.type = 'lowpass';
+    filter.frequency.value = baseFreq * 2.5;
 
-    gain.gain.setValueAtTime(startGain, this.ctx.currentTime);
-    gain.gain.linearRampToValueAtTime(0.001, this.ctx.currentTime + 0.2);
+    const startGain = (oscType === 'square' || oscType === 'sawtooth') ? 0.02 : 0.04;
+
+    // Softer attack for error
+    gain.gain.setValueAtTime(0, this.ctx.currentTime);
+    gain.gain.linearRampToValueAtTime(startGain, this.ctx.currentTime + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.2);
     
-    osc.connect(gain);
+    osc.connect(filter);
+    filter.connect(gain);
     gain.connect(this.ctx.destination);
     
     osc.start();

@@ -13,6 +13,8 @@ export interface GameStats {
   averageTime: number;
   currentStreak: number;
   totalGamesFinished: number;
+  fastestFinish: number | null;
+  achievements: string[];
 }
 
 export type CellState = {
@@ -35,8 +37,12 @@ interface GameState {
   isPaused: boolean;
   isWon: boolean;
   
+  isScanning: boolean;
+  scanningCell: [number, number] | null;
+  
   soundEnabled: boolean;
   hapticsEnabled: boolean;
+  hapticIntensity: 'low' | 'medium' | 'high';
   aiEnabled: boolean;
   theme: ThemeType;
 
@@ -49,7 +55,7 @@ interface GameState {
 
   // Actions
   startNewGame: (difficulty: Difficulty) => void;
-  loadSavedGameOrStartNew: () => void;
+  loadSavedGameOrStartNew: () => Promise<void>;
   selectCell: (row: number, col: number) => void;
   inputNumber: (num: number) => void;
   toggleNotesMode: () => void;
@@ -57,29 +63,18 @@ interface GameState {
   tickTimer: () => void;
   togglePause: () => void;
   clearSurprise: () => void;
+  revealHint: () => void;
   toggleSound: () => void;
   toggleHaptics: () => void;
+  setHapticIntensity: (intensity: 'low' | 'medium' | 'high') => void;
   toggleAI: () => void;
   setTheme: (theme: ThemeType) => void;
   toggleStats: () => void;
+  syncSettings: (user: any | null) => Promise<void>;
 }
 
 const loadStats = (): GameStats => {
-  if (typeof window !== 'undefined') {
-    const saved = localStorage.getItem('sudoku_stats');
-    if (saved) {
-      try {
-        return JSON.parse(saved);
-      } catch (e) {}
-    }
-  }
-  return { gamesWon: 0, averageTime: 0, currentStreak: 0, totalGamesFinished: 0 };
-};
-
-const saveStats = (stats: GameStats) => {
-  if (typeof window !== 'undefined') {
-    localStorage.setItem('sudoku_stats', JSON.stringify(stats));
-  }
+  return { gamesWon: 0, averageTime: 0, currentStreak: 0, totalGamesFinished: 0, fastestFinish: null, achievements: [] };
 };
 
 export const useGameStore = create<GameState>((set, get) => ({
@@ -95,8 +90,12 @@ export const useGameStore = create<GameState>((set, get) => ({
   isPaused: false,
   isWon: false,
   
+  isScanning: false,
+  scanningCell: null,
+  
   soundEnabled: true,
   hapticsEnabled: true,
+  hapticIntensity: 'medium',
   aiEnabled: true,
   theme: 'cosmic',
 
@@ -118,7 +117,6 @@ export const useGameStore = create<GameState>((set, get) => ({
         ...stats,
         currentStreak: 0
       };
-      saveStats(newStats);
       set({ stats: newStats });
     }
 
@@ -147,8 +145,8 @@ export const useGameStore = create<GameState>((set, get) => ({
     });
   },
 
-  loadSavedGameOrStartNew: () => {
-    const saved = loadGameState();
+  loadSavedGameOrStartNew: async () => {
+    const saved = await loadGameState();
     if (saved) {
       set({
         board: saved.board,
@@ -170,14 +168,14 @@ export const useGameStore = create<GameState>((set, get) => ({
   },
 
   selectCell: (row, col) => {
-    haptic.light(get().difficulty);
+    haptic.light();
     audio.playTick(get().difficulty);
     set({ selectedCell: [row, col] });
   },
 
   inputNumber: (num) => {
-    const { board, solution, selectedCell, notesMode, isPlaying, isPaused, mistakes, completedLines, difficulty } = get();
-    if (!isPlaying || isPaused || !selectedCell) return;
+    const { board, solution, selectedCell, notesMode, isPlaying, isPaused, isScanning, mistakes, completedLines, difficulty } = get();
+    if (!isPlaying || isPaused || isScanning || !selectedCell) return;
     
     const [row, col] = selectedCell;
     const cell = board[row][col];
@@ -185,13 +183,13 @@ export const useGameStore = create<GameState>((set, get) => ({
     if (cell.isInitial || cell.value === num) return;
 
     if (notesMode) {
-      haptic.light(difficulty);
+      haptic.light();
       audio.playTick(difficulty);
       const newBoard = [...board.map(r => [...r])];
       const newNotes = new Set(newBoard[row][col].notes);
       if (newNotes.has(num)) newNotes.delete(num);
       else newNotes.add(num);
-      newBoard[row][col].notes = newNotes;
+      newBoard[row][col] = { ...newBoard[row][col], notes: newNotes };
       set({ board: newBoard });
       return;
     }
@@ -253,18 +251,27 @@ export const useGameStore = create<GameState>((set, get) => ({
       }
       
     } else {
-      haptic.medium(difficulty);
+      haptic.medium();
       audio.playTick(difficulty);
-      // Clear notes from same row, col, block
+      // Clear notes from same row, col, block immutably
       for (let i = 0; i < 9; i++) {
-        newBoard[row][i].notes.delete(num);
-        newBoard[i][col].notes.delete(num);
+        if (newBoard[row][i].notes.has(num)) {
+          newBoard[row][i] = { ...newBoard[row][i], notes: new Set(newBoard[row][i].notes) };
+          newBoard[row][i].notes.delete(num);
+        }
+        if (newBoard[i][col].notes.has(num)) {
+          newBoard[i][col] = { ...newBoard[i][col], notes: new Set(newBoard[i][col].notes) };
+          newBoard[i][col].notes.delete(num);
+        }
       }
       const startRow = Math.floor(row / 3) * 3;
       const startCol = Math.floor(col / 3) * 3;
       for (let i = 0; i < 3; i++) {
         for (let j = 0; j < 3; j++) {
-          newBoard[startRow + i][startCol + j].notes.delete(num);
+          if (newBoard[startRow + i][startCol + j].notes.has(num)) {
+            newBoard[startRow + i][startCol + j] = { ...newBoard[startRow + i][startCol + j], notes: new Set(newBoard[startRow + i][startCol + j].notes) };
+            newBoard[startRow + i][startCol + j].notes.delete(num);
+          }
         }
       }
 
@@ -321,15 +328,23 @@ export const useGameStore = create<GameState>((set, get) => ({
       audio.playTada();
       clearSavedGame(); // game over, remove saved state
 
-      const { stats, timeElapsed } = get();
+      const { stats, timeElapsed, mistakes } = get();
+      
+      const achievements = new Set(stats.achievements || []);
+      if (stats.gamesWon + 1 >= 10) achievements.add('Complete 10 games');
+      if (mistakes === 0) achievements.add('No mistakes');
+      if (stats.fastestFinish === null || timeElapsed < stats.fastestFinish) achievements.add('Fastest finish');
+      
       const newStats = {
         ...stats,
         gamesWon: stats.gamesWon + 1,
         currentStreak: stats.currentStreak + 1,
         totalGamesFinished: stats.totalGamesFinished + 1,
-        averageTime: Math.round(((stats.averageTime * stats.totalGamesFinished) + timeElapsed) / (stats.totalGamesFinished + 1))
+        averageTime: Math.round(((stats.averageTime * stats.totalGamesFinished) + timeElapsed) / (stats.totalGamesFinished + 1)),
+        fastestFinish: stats.fastestFinish === null ? timeElapsed : Math.min(stats.fastestFinish, timeElapsed),
+        achievements: Array.from(achievements)
       };
-      saveStats(newStats);
+      
       set({ stats: newStats });
     }
 
@@ -349,25 +364,19 @@ export const useGameStore = create<GameState>((set, get) => ({
     }
     
     if (!won) {
-        saveGameState({
-            board: newBoard,
-            solution,
-            difficulty,
-            mistakes: newMistakes,
-            timeElapsed: get().timeElapsed
-        });
+      // Auto-save is handled by state subscription
     }
   },
 
   toggleNotesMode: () => {
-    haptic.light(get().difficulty);
+    haptic.light();
     audio.playTick(get().difficulty);
     set((state) => ({ notesMode: !state.notesMode }));
   },
 
   eraseCell: () => {
-    const { board, selectedCell, isPlaying, isPaused, difficulty } = get();
-    if (!isPlaying || isPaused || !selectedCell) return;
+    const { board, selectedCell, isPlaying, isPaused, isScanning, difficulty } = get();
+    if (!isPlaying || isPaused || isScanning || !selectedCell) return;
     
     const [row, col] = selectedCell;
     const cell = board[row][col];
@@ -378,7 +387,7 @@ export const useGameStore = create<GameState>((set, get) => ({
       return;
     }
 
-    haptic.heavy(difficulty);
+    haptic.heavy();
     audio.playTick(difficulty);
     const newBoard = [...board.map(r => [...r])];
     newBoard[row][col] = {
@@ -388,25 +397,13 @@ export const useGameStore = create<GameState>((set, get) => ({
     };
     
     set({ board: newBoard });
-    saveGameState({
-        board: newBoard,
-        solution: get().solution,
-        difficulty,
-        mistakes: get().mistakes,
-        timeElapsed: get().timeElapsed
-    });
   },
 
   tickTimer: () => {
-    const { isPlaying, isPaused, timeElapsed, board, solution, difficulty, mistakes } = get();
+    const { isPlaying, isPaused, timeElapsed } = get();
     if (isPlaying && !isPaused) {
       const newTime = timeElapsed + 1;
       set({ timeElapsed: newTime });
-      
-      // Auto-save every 10 seconds to keep time roughly accurate
-      if (newTime % 10 === 0 && board.length === 9) {
-          saveGameState({ board, solution, difficulty, mistakes, timeElapsed: newTime });
-      }
     }
   },
 
@@ -417,6 +414,60 @@ export const useGameStore = create<GameState>((set, get) => ({
   },
 
   clearSurprise: () => set({ lastSurprise: null }),
+
+  revealHint: () => {
+    const { board, solution, isPlaying, isPaused, isScanning, difficulty } = get();
+    if (!isPlaying || isPaused || isScanning) return;
+
+    // Find all empty or incorrect cells
+    const candidates: [number, number][] = [];
+    for (let r = 0; r < 9; r++) {
+      for (let c = 0; c < 9; c++) {
+        const bdCell = board[r][c];
+        if (!bdCell.isInitial && bdCell.value !== solution[r][c]) {
+          candidates.push([r, c]);
+        }
+      }
+    }
+
+    if (candidates.length === 0) return;
+
+    // Pick a random candidate
+    const target = candidates[Math.floor(Math.random() * candidates.length)];
+    const [targetR, targetC] = target;
+
+    set({ isScanning: true });
+    
+    let scanCount = 0;
+    const maxScans = 15;
+    
+    haptic.heavy();
+    
+    const scanInterval = setInterval(() => {
+      audio.playTick(difficulty);
+      // Pick random cell for visual scan effect
+      const randomR = Math.floor(Math.random() * 9);
+      const randomC = Math.floor(Math.random() * 9);
+      set({ scanningCell: [randomR, randomC] });
+      
+      scanCount++;
+      if (scanCount >= maxScans) {
+        clearInterval(scanInterval);
+        
+        // Finalize scan
+        set({ isScanning: false, scanningCell: null });
+        
+        // Input the correct number
+        const wasNotesMode = get().notesMode;
+        if (wasNotesMode) set({ notesMode: false });
+        
+        get().selectCell(targetR, targetC);
+        get().inputNumber(solution[targetR][targetC]);
+        
+        if (wasNotesMode) set({ notesMode: true });
+      }
+    }, 80);
+  },
 
   toggleSound: () => {
     set((state) => {
@@ -436,6 +487,17 @@ export const useGameStore = create<GameState>((set, get) => ({
     });
   },
 
+  setHapticIntensity: (intensity: 'low' | 'medium' | 'high') => {
+    set({ hapticIntensity: intensity });
+    haptic.intensity = intensity;
+    // Maybe trigger a sample haptic feedback?
+    if (get().hapticsEnabled) {
+       import('../lib/haptics').then(({ haptic }) => {
+          haptic.medium(); // Just a test buzz
+       });
+    }
+  },
+
   toggleAI: () => {
     haptic.light();
     audio.playTick();
@@ -453,5 +515,114 @@ export const useGameStore = create<GameState>((set, get) => ({
     audio.playTick();
     audio.theme = theme;
     set({ theme });
+  },
+
+  syncSettings: async (user) => {
+    if (user) {
+      // Import dynamically to avoid circular dependencies if any
+      const { doc, getDoc } = await import('firebase/firestore');
+      const { db } = await import('../lib/firebase');
+      try {
+        const docRef = doc(db, 'users', user.uid, 'settings', 'current');
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists()) {
+          const s = docSnap.data();
+          set({
+            theme: s.theme || 'cosmic',
+            soundEnabled: s.soundEnabled ?? true,
+            hapticsEnabled: s.hapticsEnabled ?? true,
+            hapticIntensity: s.hapticIntensity || 'medium',
+            aiEnabled: s.aiEnabled ?? true,
+            stats: s.stats || { gamesWon: 0, averageTime: 0, currentStreak: 0, totalGamesFinished: 0, fastestFinish: null, achievements: [] }
+          });
+          audio.enabled = s.soundEnabled ?? true;
+          haptic.enabled = s.hapticsEnabled ?? true;
+          haptic.intensity = s.hapticIntensity || 'medium';
+          audio.theme = s.theme || 'cosmic';
+          return;
+        }
+      } catch (e) {
+        console.error("Failed to load settings:", e);
+      }
+    } 
+    
+    // Fallback to local storage
+    if (typeof window !== 'undefined') {
+      try {
+        const localStatsRaw = localStorage.getItem('sudoku_stats');
+        const localSettingsRaw = localStorage.getItem('sudoku_settings');
+        
+        let stats = { gamesWon: 0, averageTime: 0, currentStreak: 0, totalGamesFinished: 0, fastestFinish: null, achievements: [] };
+        if (localStatsRaw) stats = JSON.parse(localStatsRaw);
+        
+        let s: any = {};
+        if (localSettingsRaw) s = JSON.parse(localSettingsRaw);
+        
+        set({ 
+          theme: s.theme || 'cosmic', 
+          soundEnabled: s.soundEnabled ?? true, 
+          hapticsEnabled: s.hapticsEnabled ?? true, 
+          hapticIntensity: s.hapticIntensity || 'medium',
+          aiEnabled: s.aiEnabled ?? true,
+          stats: stats
+        });
+        audio.enabled = s.soundEnabled ?? true;
+        haptic.enabled = s.hapticsEnabled ?? true;
+        haptic.intensity = s.hapticIntensity || 'medium';
+        audio.theme = s.theme || 'cosmic';
+      } catch (e) {
+        console.error("Failed to load local settings:", e);
+      }
+    }
   }
 }));
+
+useGameStore.subscribe((state, prevState) => {
+  if (state.isPlaying && state.board.length === 9 && !state.isWon) {
+    // Only save when board/mistakes change or when timeElapsed hits a 10s mark to avoid excessive spam
+    if (
+      state.board !== prevState?.board || 
+      state.mistakes !== prevState?.mistakes || 
+      (state.timeElapsed !== prevState?.timeElapsed && state.timeElapsed % 10 === 0)
+    ) {
+      saveGameState({
+        board: state.board,
+        solution: state.solution,
+        difficulty: state.difficulty,
+        mistakes: state.mistakes,
+        timeElapsed: state.timeElapsed,
+      });
+    }
+  }
+
+  if (prevState && (state.theme !== prevState.theme || state.soundEnabled !== prevState.soundEnabled || state.hapticsEnabled !== prevState.hapticsEnabled || state.hapticIntensity !== prevState.hapticIntensity || state.aiEnabled !== prevState.aiEnabled || state.stats !== prevState.stats)) {
+    // Store locally to support guest play or offline caching
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('sudoku_stats', JSON.stringify(state.stats));
+      localStorage.setItem('sudoku_settings', JSON.stringify({
+        theme: state.theme,
+        soundEnabled: state.soundEnabled,
+        hapticsEnabled: state.hapticsEnabled,
+        hapticIntensity: state.hapticIntensity,
+        aiEnabled: state.aiEnabled
+      }));
+    }
+
+    // dynamically import
+    import('../lib/firebase').then(({ auth, db }) => {
+      const user = auth.currentUser;
+      if (user) {
+        import('firebase/firestore').then(({ doc, setDoc }) => {
+          setDoc(doc(db, 'users', user.uid, 'settings', 'current'), {
+            theme: state.theme,
+            soundEnabled: state.soundEnabled,
+            hapticsEnabled: state.hapticsEnabled,
+            hapticIntensity: state.hapticIntensity,
+            aiEnabled: state.aiEnabled,
+            stats: state.stats
+          }, { merge: true }).catch(console.error);
+        });
+      }
+    });
+  }
+});

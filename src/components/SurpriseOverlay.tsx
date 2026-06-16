@@ -15,11 +15,12 @@ export function SurpriseOverlay() {
       const animationEnd = Date.now() + duration;
       const defaults = { startVelocity: 30, spread: 360, ticks: 60, zIndex: 50 };
 
-      const interval: any = setInterval(function() {
+      const interval = setInterval(function() {
         const timeLeft = animationEnd - Date.now();
 
         if (timeLeft <= 0) {
-          return clearInterval(interval);
+          clearInterval(interval);
+          return;
         }
 
         const particleCount = 50 * (timeLeft / duration);
@@ -85,7 +86,7 @@ export function SurpriseOverlay() {
       )}
 
       {lastSurprise?.startsWith('ai_hint:') && (
-        <SurpriseMessage emoji="🔮" text={lastSurprise.split('ai_hint:')[1]} durationMs={6000} />
+        <SurpriseMessage emoji="🧠" text={lastSurprise.split('ai_hint:')[1]} durationMs={6000} title="STRATEGIC TIP:" />
       )}
       
       {lastSurprise?.startsWith('ai_snark:') && (
@@ -95,7 +96,7 @@ export function SurpriseOverlay() {
   );
 }
 
-function SurpriseMessage({ emoji, text, durationMs = 3000 }: { emoji: string, text: string, durationMs?: number }) {
+function SurpriseMessage({ emoji, text, durationMs = 3000, title = "THE SYSTEM SAYS:" }: { emoji: string, text: string, durationMs?: number, title?: string }) {
   useEffect(() => {
     if (audio.enabled && typeof window !== 'undefined' && 'speechSynthesis' in window && text) {
       // Cancel any ongoing speech
@@ -120,7 +121,7 @@ function SurpriseMessage({ emoji, text, durationMs = 3000 }: { emoji: string, te
         {emoji}
       </div>
       <div className="flex-1">
-        <span className="block text-game-text-primary text-[11px] font-semibold uppercase tracking-wider mb-0.5">THE SYSTEM SAYS:</span>
+        <span className="block text-game-text-primary text-[11px] font-semibold uppercase tracking-wider mb-0.5">{title}</span>
         <p className="text-game-text-secondary text-[10px] m-0">{text}</p>
       </div>
     </motion.div>
