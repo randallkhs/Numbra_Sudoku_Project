@@ -377,24 +377,37 @@ export const useGameStore = create<GameState>((set, get) => ({
   clearSurprise: () => set({ lastSurprise: null }),
 
   revealHint: () => {
-    const { board, solution, isPlaying, isPaused, isScanning, difficulty } = get();
+    const { board, solution, isPlaying, isPaused, isScanning, difficulty, selectedCell } = get();
     if (!isPlaying || isPaused || isScanning) return;
 
-    // Find all empty or incorrect cells
-    const candidates: [number, number][] = [];
-    for (let r = 0; r < 9; r++) {
-      for (let c = 0; c < 9; c++) {
-        const bdCell = board[r][c];
-        if (!bdCell.isInitial && bdCell.value !== solution[r][c]) {
-          candidates.push([r, c]);
-        }
+    let target: [number, number] | null = null;
+    
+    if (selectedCell) {
+      const [r, c] = selectedCell;
+      const cell = board[r][c];
+      if (!cell.isInitial && cell.value !== solution[r][c]) {
+        target = [r, c];
       }
     }
 
-    if (candidates.length === 0) return;
+    if (!target) {
+      // Find all empty or incorrect cells
+      const candidates: [number, number][] = [];
+      for (let r = 0; r < 9; r++) {
+        for (let c = 0; c < 9; c++) {
+          const bdCell = board[r][c];
+          if (!bdCell.isInitial && bdCell.value !== solution[r][c]) {
+            candidates.push([r, c]);
+          }
+        }
+      }
 
-    // Pick a random candidate
-    const target = candidates[Math.floor(Math.random() * candidates.length)];
+      if (candidates.length === 0) return;
+
+      // Pick a random candidate
+      target = candidates[Math.floor(Math.random() * candidates.length)];
+    }
+
     const [targetR, targetC] = target;
 
     set({ isScanning: true });
@@ -415,17 +428,20 @@ export const useGameStore = create<GameState>((set, get) => ({
       if (scanCount >= maxScans) {
         clearInterval(scanInterval);
         
-        // Finalize scan
-        set({ isScanning: false, scanningCell: null });
-        
-        // Input the correct number
         const wasNotesMode = get().notesMode;
         if (wasNotesMode) set({ notesMode: false });
         
+        set({ scanningCell: null });
         get().selectCell(targetR, targetC);
-        get().inputNumber(solution[targetR][targetC]);
         
-        if (wasNotesMode) set({ notesMode: true });
+        setTimeout(() => {
+           // Re-select the cell to avoid race conditions if the user tapped elsewhere
+           get().selectCell(targetR, targetC);
+           get().inputNumber(solution[targetR][targetC]);
+           set({ isScanning: false });
+           
+           if (wasNotesMode) set({ notesMode: true });
+        }, 150);
       }
     }, 80);
   },

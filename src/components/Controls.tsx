@@ -26,7 +26,7 @@ export const Controls: React.FC = () => {
       />
       <ControlButton 
         icon={<Lightbulb size={24} className={isScanning ? "animate-pulse text-amber-300" : ""} />} 
-        label="Reveal" 
+        label="Hint" 
         onClick={revealHint} 
         isActive={isScanning}
       />
