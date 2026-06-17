@@ -58,40 +58,62 @@ export const Cell: React.FC<CellProps> = ({ row, col, delayIndex, triggerBloom }
 
   const borderClasses = cn(
     col !== 8 && 'border-r border-game-border border-r-[1px]',
-    row !== 8 && 'border-b border-game-border border-b-[1px]',
+    row !== 8 && 'border-b border-game-border border-b-[1px]'
   );
 
   return (
     <motion.div
       initial={{ opacity: 0, scale: 0.8 }}
-      animate={{ opacity: 1, scale: 1 }}
-      transition={{ duration: 0.3, delay: delayIndex * 0.01, type: 'spring' }}
+      animate={isSelected ? {
+        opacity: 1,
+        scale: 1,
+        boxShadow: [
+          "inset 0 0 12px var(--color-game-accent-start)",
+          "inset 0 0 24px var(--color-game-accent-light)",
+          "inset 0 0 12px var(--color-game-accent-start)"
+        ]
+      } : { 
+        opacity: 1, 
+        scale: 1,
+        boxShadow: "inset 0 0 0px transparent"
+      }}
+      transition={{ 
+        duration: 0.3, delay: delayIndex * 0.01, type: 'spring',
+        boxShadow: isSelected ? { repeat: Infinity, duration: 1.5, ease: "easeInOut" } : { duration: 0.2 }
+      }}
       whileTap={{ scale: 0.9 }}
       onClick={() => selectCell(row, col)}
       className={cn(
-        'w-full aspect-square flex items-center justify-center text-lg sm:text-2xl font-medium cursor-pointer transition-colors duration-200 select-none relative',
+        'w-full h-full flex items-center justify-center text-lg sm:text-2xl font-medium cursor-pointer transition-colors duration-200 select-none relative',
         borderClasses,
         bloom && 'animate-bloom',
         cellState.isError ? 'bg-game-error-bg text-game-error' : 
         isScanned ? 'bg-white shadow-[0_0_20px_white] z-50 transition-none scale-105 duration-75' :
-        isSelected ? 'bg-gradient-to-br from-game-accent-start/40 to-game-accent-end/40 text-white shadow-[inset_0_0_12px_var(--color-game-accent-start)] z-10 border-game-accent-light' :
+        isSelected ? 'bg-gradient-to-br from-game-accent-start/40 to-game-accent-end/40 text-white z-10 border-game-accent-light' :
         isSameValue ? 'bg-game-accent-subtle text-game-accent-light z-0' :
-        isRelated ? 'bg-game-surface animate-crosshair z-0' : 'hover:bg-game-surface-hover z-0',
+        isRelated ? 'bg-game-surface animate-crosshair z-0' : 'bg-game-surface hover:bg-game-surface-hover z-0',
         cellState.isInitial ? 'text-game-text-primary font-semibold' : 'text-game-accent-light font-light'
       )}
     >
       {cellState.value !== 0 ? (
-        <motion.span
+        <motion.div
           key={`${row}-${col}-${cellState.value}`}
-          initial={!cellState.isInitial ? { scale: 0.5, opacity: 0 } : false}
-          animate={{ scale: 1, opacity: 1 }}
-          transition={{ type: 'spring', stiffness: 500, damping: 15, mass: 1 }}
+          initial={!cellState.isInitial ? { scale: 0.3, opacity: 0 } : false}
+          animate={{ 
+            scale: isSameValue ? [1, 1.2, 1] : 1, 
+            opacity: 1, 
+            color: cellState.isError ? 'var(--color-game-error)' : undefined
+          }}
+          transition={{ 
+            type: 'spring', stiffness: 500, damping: 15, mass: 1,
+            scale: isSameValue ? { repeat: Infinity, duration: 1.5, ease: "easeInOut" } : { type: 'spring', stiffness: 600, damping: 12 }
+          }}
           className={cn(
             cellState.isError && 'animate-[shake_0.4s_ease-in-out]'
           )}
         >
           {cellState.value}
-        </motion.span>
+        </motion.div>
       ) : (
         <div className="grid grid-cols-3 grid-rows-3 w-full h-full p-0.5 pointer-events-none">
           {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => (

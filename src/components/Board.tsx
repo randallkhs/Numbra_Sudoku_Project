@@ -6,12 +6,17 @@ export function Board() {
   const board = useGameStore(state => state.board);
   const isWon = useGameStore(state => state.isWon);
   const completedLines = useGameStore(state => state.completedLines);
+  const solution = useGameStore(state => state.solution);
 
   if (!board.length) return null;
+
+  const gameKey = solution.length > 0 ? solution[0].join('') : 'init';
 
   return (
     <div className="relative w-full max-w-[400px] mx-auto p-4 perspective-1000">
       <motion.div
+        key={gameKey}
+        initial={{ opacity: 0, scale: 0.9, rotate: -2 }}
         animate={isWon ? { 
           rotateX: [0, 10, 0], 
           scale: [1, 1.05, 1],
@@ -20,9 +25,9 @@ export function Board() {
             "0 0 40px 10px var(--color-game-accent-start)",
             "0 0 20px 5px var(--color-game-accent-subtle)"
           ]
-        } : {}}
-        transition={{ duration: 1.5, ease: "easeInOut" }}
-        className="w-full aspect-square grid grid-cols-9 bg-game-surface border-[2px] border-game-border-strong rounded-[20px] overflow-hidden shadow-[inset_0_0_20px_rgba(0,0,0,0.5)] backdrop-blur-md relative"
+        } : { opacity: 1, scale: 1, rotate: 0 }}
+        transition={{ duration: isWon ? 1.5 : 0.6, ease: isWon ? "easeInOut" : "easeOut" }}
+        className="w-full aspect-square grid grid-cols-9 grid-rows-9 bg-game-surface border-[2px] border-game-border-strong rounded-[20px] overflow-hidden shadow-[inset_0_0_20px_rgba(0,0,0,0.5)] backdrop-blur-md relative"
       >
         {/* Thick Block dividers mapping the 3x3 layout globally */}
         <div className="absolute top-0 bottom-0 left-[calc(100%/3)] w-[2px] bg-game-border-strong z-20 pointer-events-none" />

@@ -40,7 +40,7 @@ interface NumButtonProps {
 const NumButton: React.FC<NumButtonProps> = ({ num, onClick, disabled, className }) => {
   return (
     <motion.button
-      whileTap={!disabled ? { scale: 0.95 } : {}}
+      whileTap={!disabled ? { scale: 0.85, rotate: -5, borderRadius: '25px' } : {}}
       onClick={onClick}
       disabled={disabled}
       className={cn(
