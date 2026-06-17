@@ -15,7 +15,6 @@ import { StatsModal } from './components/StatsModal';
 import { cn } from './lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 
-import { loadSnarks, saveSnark, getRandomSnark } from './lib/aiCache';
 import { clearSavedGame } from './lib/gameStateCache';
 import { onAuthStateChanged } from 'firebase/auth';
 import { auth } from './lib/firebase';
@@ -33,7 +32,6 @@ export default function App() {
   const difficulty = useGameStore(state => state.difficulty);
   const board = useGameStore(state => state.board);
   const theme = useGameStore(state => state.theme);
-  const aiEnabled = useGameStore(state => state.aiEnabled);
 
   const [authReady, setAuthReady] = useState(false);
 
@@ -49,50 +47,6 @@ export default function App() {
     // Apply the theme to the root element so CSS variables cascade properly for everything including modals/absolute positioned elements
     document.documentElement.className = `theme-${theme}`;
   }, [theme]);
-
-  // Idle timer for AI Snark
-  useEffect(() => {
-    if (!isPlaying || isPaused || !aiEnabled) return;
-
-    const idleTimer = setTimeout(() => {
-      const snarks = loadSnarks();
-      const useLocal = snarks.length > 3 && Math.random() < 0.6;
-      
-      if (useLocal) {
-        const text = getRandomSnark();
-        if (text) {
-          useGameStore.setState({ lastSurprise: `ai_snark:${text}` });
-          return;
-        }
-      }
-      
-      fetch('/api/ai/comment', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          prompt: "El jugador lleva demasiado tiempo mirando el tablero sin hacer nada. Haz un comentario burlón, cómico y exagerado sobre su lentitud, como si tú te estuvieras aburriendo o durmiendo. Usa analogías graciosas o refranes.", 
-          context: { difficulty, theme } 
-        })
-      })
-      .then(res => res.json())
-      .then(data => {
-        if (data.text) {
-          saveSnark(data.text);
-          useGameStore.setState({ lastSurprise: `ai_snark:${data.text}` });
-        } else if (data.error && snarks.length > 0) {
-          const text = getRandomSnark();
-          if (text) useGameStore.setState({ lastSurprise: `ai_snark:${text}` });
-        }
-      })
-      .catch((err) => {
-          console.log(err);
-          const text = getRandomSnark();
-          if (text) useGameStore.setState({ lastSurprise: `ai_snark:${text}` });
-      });
-    }, 25000); // 25 seconds idle
-
-    return () => clearTimeout(idleTimer);
-  }, [isPlaying, isPaused, difficulty, board, selectedCell, theme, aiEnabled]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {

@@ -2,7 +2,6 @@ import { create } from 'zustand';
 import { generateSudoku, Difficulty } from '../lib/sudoku';
 import { haptic } from '../lib/haptics';
 import { audio } from '../lib/audio';
-import { loadSnarks, saveSnark, getRandomSnark } from '../lib/aiCache';
 import { saveGameState, loadGameState, clearSavedGame } from '../lib/gameStateCache';
 
 
@@ -43,10 +42,10 @@ interface GameState {
   soundEnabled: boolean;
   hapticsEnabled: boolean;
   hapticIntensity: 'low' | 'medium' | 'high';
-  aiEnabled: boolean;
   theme: ThemeType;
 
   stats: GameStats;
+
   showStats: boolean;
 
   // Surprises & Animations
@@ -67,7 +66,6 @@ interface GameState {
   toggleSound: () => void;
   toggleHaptics: () => void;
   setHapticIntensity: (intensity: 'low' | 'medium' | 'high') => void;
-  toggleAI: () => void;
   setTheme: (theme: ThemeType) => void;
   toggleStats: () => void;
   syncSettings: (user: any | null) => Promise<void>;
@@ -96,7 +94,6 @@ export const useGameStore = create<GameState>((set, get) => ({
   soundEnabled: true,
   hapticsEnabled: true,
   hapticIntensity: 'medium',
-  aiEnabled: true,
   theme: 'cosmic',
 
   stats: loadStats(),
@@ -214,42 +211,6 @@ export const useGameStore = create<GameState>((set, get) => ({
       newMistakes += 1;
       
       if (newMistakes === 3) surprise = 'bruh';
-      
-      if (get().aiEnabled) {
-        const snarks = loadSnarks();
-        // Use cache: if we have more than 3, have a 60% chance to skip API to save tokens/quota
-        const useLocal = snarks.length > 3 && Math.random() < 0.6;
-
-        if (useLocal) {
-          const text = getRandomSnark();
-          if (text) {
-             useGameStore.setState({ lastSurprise: `ai_snark:${text}` });
-          }
-        } else {
-          // Make a side-effect call for AI comment without blocking
-          fetch('/api/ai/comment', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ prompt: "El jugador acaba de poner un número incorrecto.", context: { difficulty, theme: get().theme } })
-          })
-          .then(res => res.json())
-          .then(data => {
-            if (data.text) {
-              saveSnark(data.text);
-              useGameStore.setState({ lastSurprise: `ai_snark:${data.text}` });
-            } else if (data.error && snarks.length > 0) {
-              const text = getRandomSnark();
-              if (text) useGameStore.setState({ lastSurprise: `ai_snark:${text}` });
-            }
-          })
-          .catch((err) => {
-            console.log(err);
-            const text = getRandomSnark();
-            if (text) useGameStore.setState({ lastSurprise: `ai_snark:${text}` });
-          });
-        }
-      }
-      
     } else {
       haptic.medium();
       audio.playTick(difficulty);
@@ -498,12 +459,6 @@ export const useGameStore = create<GameState>((set, get) => ({
     }
   },
 
-  toggleAI: () => {
-    haptic.light();
-    audio.playTick();
-    set((state) => ({ aiEnabled: !state.aiEnabled }));
-  },
-
   toggleStats: () => {
     haptic.light();
     audio.playTick();
@@ -532,7 +487,6 @@ export const useGameStore = create<GameState>((set, get) => ({
             soundEnabled: s.soundEnabled ?? true,
             hapticsEnabled: s.hapticsEnabled ?? true,
             hapticIntensity: s.hapticIntensity || 'medium',
-            aiEnabled: s.aiEnabled ?? true,
             stats: s.stats || { gamesWon: 0, averageTime: 0, currentStreak: 0, totalGamesFinished: 0, fastestFinish: null, achievements: [] }
           });
           audio.enabled = s.soundEnabled ?? true;
@@ -563,7 +517,6 @@ export const useGameStore = create<GameState>((set, get) => ({
           soundEnabled: s.soundEnabled ?? true, 
           hapticsEnabled: s.hapticsEnabled ?? true, 
           hapticIntensity: s.hapticIntensity || 'medium',
-          aiEnabled: s.aiEnabled ?? true,
           stats: stats
         });
         audio.enabled = s.soundEnabled ?? true;
@@ -595,7 +548,7 @@ useGameStore.subscribe((state, prevState) => {
     }
   }
 
-  if (prevState && (state.theme !== prevState.theme || state.soundEnabled !== prevState.soundEnabled || state.hapticsEnabled !== prevState.hapticsEnabled || state.hapticIntensity !== prevState.hapticIntensity || state.aiEnabled !== prevState.aiEnabled || state.stats !== prevState.stats)) {
+  if (prevState && (state.theme !== prevState.theme || state.soundEnabled !== prevState.soundEnabled || state.hapticsEnabled !== prevState.hapticsEnabled || state.hapticIntensity !== prevState.hapticIntensity || state.stats !== prevState.stats)) {
     // Store locally to support guest play or offline caching
     if (typeof window !== 'undefined') {
       localStorage.setItem('sudoku_stats', JSON.stringify(state.stats));
@@ -603,8 +556,7 @@ useGameStore.subscribe((state, prevState) => {
         theme: state.theme,
         soundEnabled: state.soundEnabled,
         hapticsEnabled: state.hapticsEnabled,
-        hapticIntensity: state.hapticIntensity,
-        aiEnabled: state.aiEnabled
+        hapticIntensity: state.hapticIntensity
       }));
     }
 
@@ -618,7 +570,6 @@ useGameStore.subscribe((state, prevState) => {
             soundEnabled: state.soundEnabled,
             hapticsEnabled: state.hapticsEnabled,
             hapticIntensity: state.hapticIntensity,
-            aiEnabled: state.aiEnabled,
             stats: state.stats
           }, { merge: true }).catch(console.error);
         });

@@ -8,13 +8,6 @@ class SubtleAudio {
       try {
         const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
         this.ctx = new AudioContext();
-        
-        // Unlock speech synthesis engine with a silent utterance
-        if ('speechSynthesis' in window) {
-          const u = new SpeechSynthesisUtterance('');
-          u.volume = 0;
-          window.speechSynthesis.speak(u);
-        }
       } catch (e) {}
     }
   }

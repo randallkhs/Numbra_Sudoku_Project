@@ -1,36 +1,11 @@
 import { motion } from 'motion/react';
 import { useGameStore } from '../store/gameStore';
-import { Pencil, Eraser, RotateCcw, Play, Pause, Sparkles, Lightbulb } from 'lucide-react';
+import { Pencil, Eraser, RotateCcw, Play, Pause, Lightbulb } from 'lucide-react';
 import { cn } from '../lib/utils';
 import React, { useState } from 'react';
 
 export const Controls: React.FC = () => {
-  const { notesMode, toggleNotesMode, eraseCell, isPaused, togglePause, startNewGame, difficulty, board, theme, aiEnabled, revealHint, isScanning } = useGameStore();
-  const [loadingHint, setLoadingHint] = useState(false);
-
-  const getAIHint = async () => {
-    if (loadingHint) return;
-    setLoadingHint(true);
-    try {
-      const simplifiedGrid = board.map(row => row.map(c => c.value));
-      const res = await fetch('/api/ai/hint', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ grid: simplifiedGrid, theme, difficulty })
-      });
-      const data = await res.json();
-      if (data.text) {
-        useGameStore.setState({ lastSurprise: `ai_hint:${data.text}` });
-      } else if (data.error) {
-        useGameStore.setState({ lastSurprise: `ai_hint:Mmm, mi cerebro cósmico está descansando. ¡Sigue intentando!` });
-      }
-    } catch (e) {
-      console.error(e);
-      useGameStore.setState({ lastSurprise: `ai_hint:Mmm, los astros me impiden ver la pista ahora. ¡Tú puedes, genio!` });
-    } finally {
-      setLoadingHint(false);
-    }
-  };
+  const { notesMode, toggleNotesMode, eraseCell, isPaused, togglePause, startNewGame, difficulty, revealHint, isScanning } = useGameStore();
 
   return (
     <motion.div 
@@ -55,14 +30,6 @@ export const Controls: React.FC = () => {
         onClick={revealHint} 
         isActive={isScanning}
       />
-      {aiEnabled && (
-        <ControlButton 
-          icon={<Sparkles size={24} className={loadingHint ? "animate-pulse text-purple-400" : ""} />} 
-          label="AI Hint" 
-          onClick={getAIHint} 
-          isActive={loadingHint}
-        />
-      )}
       <ControlButton 
         icon={<Pencil size={24} />} 
         label="Notes" 

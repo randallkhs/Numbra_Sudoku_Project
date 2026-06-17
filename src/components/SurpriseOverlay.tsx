@@ -2,7 +2,6 @@ import { useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import confetti from 'canvas-confetti';
 import { useGameStore } from '../store/gameStore';
-import { audio } from '../lib/audio';
 
 export function SurpriseOverlay() {
   const isWon = useGameStore(state => state.isWon);
@@ -31,10 +30,9 @@ export function SurpriseOverlay() {
 
   useEffect(() => {
     if (lastSurprise) {
-      const time = (lastSurprise.startsWith('ai_hint:') || lastSurprise.startsWith('ai_snark:')) ? 6000 : 3000;
       const timer = setTimeout(() => {
         clearSurprise();
-      }, time);
+      }, 3000);
       return () => clearTimeout(timer);
     }
   }, [lastSurprise, clearSurprise]);
@@ -84,32 +82,11 @@ export function SurpriseOverlay() {
       {lastSurprise === 'line_clear' && (
         <SurpriseMessage emoji="✨" text="Section unlocked!" />
       )}
-
-      {lastSurprise?.startsWith('ai_hint:') && (
-        <SurpriseMessage emoji="🧠" text={lastSurprise.split('ai_hint:')[1]} durationMs={6000} title="STRATEGIC TIP:" />
-      )}
-      
-      {lastSurprise?.startsWith('ai_snark:') && (
-        <SurpriseMessage emoji="🤪" text={lastSurprise.split('ai_snark:')[1]} durationMs={6000} />
-      )}
     </AnimatePresence>
   );
 }
 
 function SurpriseMessage({ emoji, text, durationMs = 3000, title = "THE SYSTEM SAYS:" }: { emoji: string, text: string, durationMs?: number, title?: string }) {
-  useEffect(() => {
-    if (audio.enabled && typeof window !== 'undefined' && 'speechSynthesis' in window && text) {
-      // Cancel any ongoing speech
-      window.speechSynthesis.cancel();
-      const utterance = new SpeechSynthesisUtterance(text);
-      utterance.lang = 'es-ES'; // Spanish voice for the Spanish comments
-      utterance.rate = 1.1; // Slightly faster
-      utterance.volume = 1; // Explicitly ensure it's loud
-      utterance.pitch = Math.random() * 0.4 + 0.8; // Randomize pitch a bit 0.8-1.2
-      window.speechSynthesis.speak(utterance);
-    }
-  }, [text]);
-
   return (
     <motion.div
       initial={{ opacity: 0, y: -50, scale: 0.8 }}

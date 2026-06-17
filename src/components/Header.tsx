@@ -95,7 +95,7 @@ export function Header() {
 }
 
 function SettingsMenu({ onClose }: { onClose: () => void }) {
-  const { soundEnabled, toggleSound, hapticsEnabled, toggleHaptics, hapticIntensity, setHapticIntensity, theme, setTheme, aiEnabled, toggleAI } = useGameStore();
+    const { soundEnabled, toggleSound, hapticsEnabled, toggleHaptics, hapticIntensity, setHapticIntensity, theme, setTheme } = useGameStore();
 
   const [user, setUser] = useState(auth.currentUser);
 
@@ -210,15 +210,6 @@ function SettingsMenu({ onClose }: { onClose: () => void }) {
           </AnimatePresence>
         </div>
 
-        <div className="flex justify-between items-center">
-          <span className="text-sm font-medium text-gray-200">AI System</span>
-          <button 
-            onClick={toggleAI}
-            className={cn("w-12 h-12 rounded-full flex items-center justify-center transition-all shadow-lg", aiEnabled ? "bg-game-accent-start text-white" : "bg-game-surface text-gray-400")}
-          >
-            <Sparkles size={20} className={cn(!aiEnabled && "opacity-50")} />
-          </button>
-        </div>
       </div>
 
       <div className="flex flex-col gap-3 pt-4 border-t border-game-border">
