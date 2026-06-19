@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { useGameStore } from '../store/gameStore';
 import { X, Trophy, Timer, Flame, Award, Zap } from 'lucide-react';
 import { cn } from '../lib/utils';
+import { StatsChart } from './StatsChart';
 
 export const StatsModal: React.FC = () => {
   const { showStats, toggleStats, stats } = useGameStore();
@@ -117,6 +118,10 @@ export const StatsModal: React.FC = () => {
                             {stats.fastestFinish !== null && stats.fastestFinish !== undefined ? formatTime(stats.fastestFinish) : '--:--'}
                           </span>
                         </div>
+                      </div>
+
+                      <div className="col-span-2">
+                        <StatsChart />
                       </div>
                     </motion.div>
                   ) : (

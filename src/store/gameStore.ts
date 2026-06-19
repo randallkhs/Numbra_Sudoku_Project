@@ -16,6 +16,14 @@ export type AnimationEventInput =
 
 export type AnimationEvent = AnimationEventInput & { id: string; createdAt: number };
 
+export interface GameHistoryEntry {
+  difficulty: Difficulty;
+  timeElapsed: number;
+  date: string;
+  isDaily: boolean;
+  mistakes: number;
+}
+
 export interface GameStats {
   gamesWon: number;
   averageTime: number;
@@ -23,6 +31,7 @@ export interface GameStats {
   totalGamesFinished: number;
   fastestFinish: number | null;
   achievements: string[];
+  history?: GameHistoryEntry[];
 }
 
 export type CellState = {
@@ -233,7 +242,7 @@ interface GameState {
 }
 
 const loadStats = (): GameStats => {
-  return { gamesWon: 0, averageTime: 0, currentStreak: 0, totalGamesFinished: 0, fastestFinish: null, achievements: [] };
+  return { gamesWon: 0, averageTime: 0, currentStreak: 0, totalGamesFinished: 0, fastestFinish: null, achievements: [], history: [] };
 };
 
 const pushUndoState = (get: () => GameState, set: (state: any) => void) => {
@@ -673,14 +682,23 @@ export const useGameStore = create<GameState>((set, get) => ({
       if (newMistakes === 0) achievements.add('No mistakes');
       if (stats.fastestFinish === null || timeElapsed < stats.fastestFinish) achievements.add('Fastest finish');
       
-      const newStats = {
+      const newHistoryEntry: GameHistoryEntry = {
+        difficulty,
+        timeElapsed,
+        date: new Date().toISOString().split('T')[0],
+        isDaily: isDailyChallenge,
+        mistakes: newMistakes
+      };
+      
+      const newStats: GameStats = {
         ...stats,
         gamesWon: stats.gamesWon + 1,
         currentStreak: stats.currentStreak + 1,
         totalGamesFinished: stats.totalGamesFinished + 1,
         averageTime: Math.round(((stats.averageTime * stats.totalGamesFinished) + timeElapsed) / (stats.totalGamesFinished + 1)),
         fastestFinish: stats.fastestFinish === null ? timeElapsed : Math.min(stats.fastestFinish, timeElapsed),
-        achievements: Array.from(achievements)
+        achievements: Array.from(achievements),
+        history: [...(stats.history || []), newHistoryEntry]
       };
       
       set({ stats: newStats });
