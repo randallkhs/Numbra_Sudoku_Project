@@ -68,6 +68,16 @@ export const Cell: React.FC<CellProps> = ({ row, col, delayIndex, triggerBloom }
   const recentCorrect = events.find(e => e.type === 'cell-correct' && Date.now() - e.createdAt < 800);
   const recentUnit = events.find(e => e.type === 'unit-complete' && Date.now() - e.createdAt < 1200);
 
+  const globalRecentUnits = React.useMemo(() => {
+    return animationEvents
+      .filter(e => e.type === 'unit-complete' && Date.now() - e.createdAt < 1200)
+      .sort((a, b) => a.createdAt - b.createdAt || (a as any).unit.localeCompare((b as any).unit));
+  }, [animationEvents]);
+
+  const cellUnitEvents = React.useMemo(() => {
+    return events.filter(e => e.type === 'unit-complete' && Date.now() - e.createdAt < 1200);
+  }, [events]);
+
   // Highlight logic
   let isSelected = false;
   let isRelated = false;
@@ -153,25 +163,32 @@ export const Cell: React.FC<CellProps> = ({ row, col, delayIndex, triggerBloom }
       cellTransition = { duration: isOwner ? 0.45 : 0.6, ease: "easeInOut" };
     } else if (recentCorrect) {
       cellAnimate = {
-        scale: [1, 1.2, 0.95, 1],
-        backgroundColor: ["var(--color-game-surface)", "rgba(16, 185, 129, 0.15)", "var(--color-game-surface)"],
+        scale: [1, 1.15, 0.95, 1],
+        boxShadow: [
+          "inset 0 0 0px transparent",
+          "inset 0 0 16px var(--color-game-accent-light)",
+          "inset 0 0 0px transparent"
+        ],
+        backgroundColor: ["var(--color-game-surface)", "rgba(16, 185, 129, 0.08)", "var(--color-game-surface)"],
       };
       cellTransition = { duration: 0.5, ease: "easeOut" };
     } else if (recentUnit && recentUnit.type === 'unit-complete') {
       const cellIndexInUnit = recentUnit.cells.findIndex(([r, c]) => r === row && c === col);
-      const delay = cellIndexInUnit !== -1 ? cellIndexInUnit * 0.04 : 0;
+      const unitEventIndex = globalRecentUnits.findIndex(e => e.id === recentUnit.id);
+      const seqDelay = unitEventIndex !== -1 ? unitEventIndex * 0.35 : 0;
+      const delay = (cellIndexInUnit !== -1 ? cellIndexInUnit * 0.04 : 0) + seqDelay;
       cellAnimate = {
-        scale: [1, 1.15, 0.95, 1],
-        backgroundColor: [
-          "var(--color-game-surface)",
-          "var(--color-game-accent-start)",
-          "var(--color-game-accent-subtle)",
-          "var(--color-game-surface)"
-        ],
+        scale: [1, 1.12, 0.96, 1],
+        boxShadow: [
+          "inset 0 0 0px transparent",
+          "inset 0 0 20px var(--color-game-accent-light)",
+          "inset 0 0 4px var(--color-game-accent-start)",
+          "inset 0 0 0px transparent"
+        ]
       };
       cellTransition = {
         delay,
-        duration: 0.6,
+        duration: 0.65,
         ease: "easeInOut"
       };
     } else {
@@ -222,24 +239,92 @@ export const Cell: React.FC<CellProps> = ({ row, col, delayIndex, triggerBloom }
               initial={{ scale: 0.2, opacity: 0.8 }}
               animate={{ scale: 2.5, opacity: 0 }}
               transition={{ duration: 0.5, ease: "easeOut" }}
-              className="absolute inset-0 rounded-full border border-game-error pointer-events-none z-30"
+              className="absolute inset-0 rounded-full border pointer-events-none z-30"
               style={{
                 borderColor: "var(--color-game-error)",
                 boxShadow: "0 0 12px var(--color-game-error)",
               }}
             />
           )}
+
+          {/* Premium correct insertion ring & spark particles */}
+          {recentCorrect && !reducedMotion && (
+            <div className="absolute inset-0 pointer-events-none overflow-visible flex items-center justify-center z-15">
+               <motion.div
+                 initial={{ scale: 0.8, opacity: 0.9 }}
+                 animate={{ scale: 2.2, opacity: 0 }}
+                 transition={{ duration: 0.55, ease: "easeOut" }}
+                 className="absolute rounded-full w-full h-full pointer-events-none border-2"
+                 style={{
+                   borderColor: "var(--color-game-accent-start)",
+                   boxShadow: "0 0 16px var(--color-game-accent-light)",
+                 }}
+               />
+               {[0, 1, 2, 3, 4, 5].map((idx) => {
+                 const angle = (idx * 360) / 6;
+                 const rad = (angle * Math.PI) / 180;
+                 const distance = 32;
+                 const targetX = Math.cos(rad) * distance;
+                 const targetY = Math.sin(rad) * distance;
+                 return (
+                   <motion.span
+                     key={idx}
+                     initial={{ x: 0, y: 0, scale: 0, opacity: 1 }}
+                     animate={{
+                       x: [0, targetX * 0.7, targetX],
+                       y: [0, targetY * 0.7, targetY],
+                       scale: [0, 1.4, 0.8, 0],
+                       opacity: [1, 1, 0.8, 0]
+                     }}
+                     transition={{ duration: 0.55, ease: "easeOut" }}
+                     className="absolute w-1.5 h-1.5 rounded-full"
+                     style={{
+                       backgroundColor: "var(--color-game-accent-light)",
+                       boxShadow: "0 0 8px var(--color-game-accent-light)",
+                     }}
+                   />
+                 );
+               })}
+            </div>
+          )}
+
+          {/* Light Pass container (contained inside cell boundaries) */}
+          <div className="absolute inset-0 overflow-hidden pointer-events-none z-10 rounded-[4px]">
+            {cellUnitEvents.map((unitEvt) => {
+              if (reducedMotion) return null;
+              const cellIndexInUnit = unitEvt.cells.findIndex(([r, c]) => r === row && c === col);
+              const unitEventIndex = globalRecentUnits.findIndex(e => e.id === unitEvt.id);
+              const seqDelay = unitEventIndex !== -1 ? unitEventIndex * 0.35 : 0;
+              const delay = (cellIndexInUnit !== -1 ? cellIndexInUnit * 0.04 : 0) + seqDelay;
+
+              return (
+                <motion.div
+                  key={unitEvt.id}
+                  initial={{ x: "-100%", opacity: 0 }}
+                  animate={{ x: "200%", opacity: [0, 0.6, 0.4, 0] }}
+                  transition={{
+                    delay,
+                    duration: 0.5,
+                    ease: "linear"
+                  }}
+                  className="absolute inset-0 bg-gradient-to-r from-transparent via-white/35 to-transparent pointer-events-none mix-blend-overlay skew-x-12"
+                />
+              );
+            })}
+          </div>
+
           <motion.div
             key={`${row}-${col}-${cellState.value}`}
-            initial={!cellState.isInitial ? { scale: 0.3, opacity: 0 } : false}
+            initial={!cellState.isInitial ? { scale: 0.3, opacity: 0, filter: "blur(4px)" } : false}
             animate={{ 
               scale: isSameValue ? [1, 1.2, 1] : 1, 
               opacity: 1, 
+              filter: "blur(0px)",
               color: cellState.isError ? 'var(--color-game-error)' : undefined
             }}
             transition={{ 
-              type: 'spring', stiffness: 500, damping: 15, mass: 1,
-              scale: isSameValue ? { repeat: Infinity, duration: 1.5, ease: "easeInOut" } : { type: 'spring', stiffness: 600, damping: 12 }
+              type: 'spring', stiffness: 450, damping: 18, mass: 0.8,
+              scale: isSameValue ? { repeat: Infinity, duration: 1.5, ease: "easeInOut" } : undefined
             }}
             className={cn(
               cellState.isError && !reducedMotion && 'animate-[shake_0.4s_ease-in-out]'
