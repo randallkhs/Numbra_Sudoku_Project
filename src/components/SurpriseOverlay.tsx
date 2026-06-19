@@ -281,42 +281,6 @@ Hints: ${hintsUsed ?? 0}${flowText}`;
           </div>
         </motion.div>
       )}
-
-      {lastSurprise === 'bruh' && (
-        <SurpriseMessage key="surprise-bruh" messageId="surprise-bruh" emoji="🤦‍♂️" text="Bruh... 3 mistakes! Let's focus." />
-      )}
-      
-      {lastSurprise === 'wrong_number' && (
-        <SurpriseMessage key="surprise-wrong" messageId="surprise-wrong" emoji="🚨" text="Oops, incorrect logic!" />
-      )}
-
-      {lastSurprise === 'lucky_7' && (
-        <SurpriseMessage key="surprise-lucky" messageId="surprise-lucky" emoji="🎰" text="Lucky 7 right in the center!" />
-      )}
-
-      {lastSurprise === 'line_clear' && (
-        <SurpriseMessage key="surprise-clear" messageId="surprise-clear" emoji="✨" text="Section unlocked!" />
-      )}
     </AnimatePresence>
-  );
-}
-
-function SurpriseMessage({ emoji, text, durationMs = 3000, title = "THE SYSTEM SAYS:", messageId }: { emoji: string, text: string, durationMs?: number, title?: string, messageId?: string | number, key?: string | number }) {
-  return (
-    <motion.div
-      key={messageId}
-      initial={{ opacity: 0, y: -50, scale: 0.8 }}
-      animate={{ opacity: 1, y: 0, scale: 1 }}
-      exit={{ opacity: 0, y: -20, scale: 0.8 }}
-      className="absolute top-16 left-1/2 -translate-x-1/2 z-50 bg-black/80 backdrop-blur-[10px] border border-game-border shadow-2xl rounded-[15px] p-4 flex items-center gap-4 w-[90%] max-w-[320px] pointer-events-none"
-    >
-      <div className="w-[40px] h-[40px] bg-game-surface border border-game-border rounded-[10px] flex items-center justify-center text-[20px] shrink-0">
-        {emoji}
-      </div>
-      <div className="flex-1">
-        <span className="block text-game-text-primary text-[11px] font-semibold uppercase tracking-wider mb-0.5">{title}</span>
-        <p className="text-game-text-secondary text-[10px] m-0">{text}</p>
-      </div>
-    </motion.div>
   );
 }

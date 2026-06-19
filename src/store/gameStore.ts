@@ -3,6 +3,16 @@ import { generateSudoku, Difficulty, getConflictingCells, getCandidates, isValid
 import { haptic } from '../lib/haptics';
 import { audio } from '../lib/audio';
 import { saveGameState, loadGameState, clearSavedGame } from '../lib/gameStateCache';
+import {
+  PersonalityEvent,
+  PersonalityEventType,
+  PersonalityTone,
+  GameplayEventContext,
+  getTriggeredPersonalityEvent,
+  getPersonalityMessage,
+  EVENT_PRIORITY
+} from '../lib/personality';
+import { getThemeFeedbackProfile } from '../lib/themeFeedback';
 
 const MISTAKE_SHIELD_UNLOCK_COMBO = 5;
 
@@ -409,12 +419,20 @@ interface GameState {
 
   // Surprises & Animations
   lastSurprise: string | null;
+  personalityQueue: PersonalityEvent[];
+  lastLowPriorityTriggeredAt: number;
+  triggeredTypesThisGame: PersonalityEventType[];
+  consecutiveCorrectPlayerMoves: number;
+  correctMovesSinceLastError: number;
+  hasUnprotectedErrorSinceLastComeback: boolean;
+  hasReachedNumbraModeThisGame: boolean;
   completedLines: { type: 'row' | 'col' | 'block', index: number, id: number }[];
   completedUnitKeys: string[];
   animationEvents: AnimationEvent[];
   activeHint: ActiveHint | null;
 
   // Actions
+  removePersonalityEvent: (id: string) => void;
   startNewGame: (difficulty: Difficulty) => void;
   startDailyChallenge: (difficulty: Difficulty, dateStr: string, isPractice?: boolean) => void;
   loadSavedGameOrStartNew: () => Promise<void>;
@@ -562,6 +580,13 @@ export const useGameStore = create<GameState>((set, get) => ({
   mistakeShieldState: 'locked',
 
   lastSurprise: null,
+  personalityQueue: [],
+  lastLowPriorityTriggeredAt: 0,
+  triggeredTypesThisGame: [],
+  consecutiveCorrectPlayerMoves: 0,
+  correctMovesSinceLastError: 0,
+  hasUnprotectedErrorSinceLastComeback: false,
+  hasReachedNumbraModeThisGame: false,
   completedLines: [],
   completedUnitKeys: [],
   animationEvents: [],
@@ -606,6 +631,13 @@ export const useGameStore = create<GameState>((set, get) => ({
       undoStack: [],
       redoStack: [],
       lastSurprise: null,
+      personalityQueue: [],
+      lastLowPriorityTriggeredAt: 0,
+      triggeredTypesThisGame: [],
+      consecutiveCorrectPlayerMoves: 0,
+      correctMovesSinceLastError: 0,
+      hasUnprotectedErrorSinceLastComeback: false,
+      hasReachedNumbraModeThisGame: false,
       completedLines: [],
       completedUnitKeys: [],
       animationEvents: [],
@@ -652,6 +684,13 @@ export const useGameStore = create<GameState>((set, get) => ({
       undoStack: [],
       redoStack: [],
       lastSurprise: null,
+      personalityQueue: [],
+      lastLowPriorityTriggeredAt: 0,
+      triggeredTypesThisGame: [],
+      consecutiveCorrectPlayerMoves: 0,
+      correctMovesSinceLastError: 0,
+      hasUnprotectedErrorSinceLastComeback: false,
+      hasReachedNumbraModeThisGame: false,
       completedLines: [],
       completedUnitKeys: [],
       animationEvents: [],
@@ -718,6 +757,12 @@ export const useGameStore = create<GameState>((set, get) => ({
     const cell = board[row][col];
     if (cell.isInitial || cell.value === value) return;
 
+    // Capture state before move for naked single detection
+    const isCellEmptyBefore = cell.value === 0;
+    const boardValsBefore = board.map(r => r.map(c => c.value));
+    const candidatesBefore = getCandidates(boardValsBefore, row, col);
+    const isNakedSingle = isCellEmptyBefore && candidatesBefore.length === 1;
+
     // Deep mutable-ready copies
     const newBoard = board.map(r => r.map(c => ({
       ...c,
@@ -735,6 +780,11 @@ export const useGameStore = create<GameState>((set, get) => ({
     let newMistakes = mistakes;
     let surprise = null;
     let newCompletedLines = [...completedLines];
+
+    let rowJustCompleted = false;
+    let colJustCompleted = false;
+    let blockJustCompleted = false;
+    let completedUnitsCount = 0;
 
     let nextCombo = get().currentCombo;
     let nextMaxCombo = get().maxComboThisGame;
@@ -888,6 +938,11 @@ export const useGameStore = create<GameState>((set, get) => ({
       let lineCleared = false;
       const nextCompletedUnitKeys = [...completedUnitKeys];
 
+      rowJustCompleted = false;
+      colJustCompleted = false;
+      blockJustCompleted = false;
+      completedUnitsCount = 0;
+
       const rowKey = `row-${row}`;
       if (rowComplete && !completedUnitKeys.includes(rowKey)) {
         const cells: [number, number][] = Array.from({ length: 9 }, (_, x) => [row, x]);
@@ -900,6 +955,8 @@ export const useGameStore = create<GameState>((set, get) => ({
         newCompletedLines.push({ type: 'row', index: row, id: Date.now() + 1 });
         nextCompletedUnitKeys.push(rowKey);
         lineCleared = true;
+        rowJustCompleted = true;
+        completedUnitsCount++;
       }
 
       const colKey = `col-${col}`;
@@ -914,6 +971,8 @@ export const useGameStore = create<GameState>((set, get) => ({
         newCompletedLines.push({ type: 'col', index: col, id: Date.now() + 2 });
         nextCompletedUnitKeys.push(colKey);
         lineCleared = true;
+        colJustCompleted = true;
+        completedUnitsCount++;
       }
 
       const blockIndex = Math.floor(row / 3) * 3 + Math.floor(col / 3);
@@ -934,6 +993,8 @@ export const useGameStore = create<GameState>((set, get) => ({
         newCompletedLines.push({ type: 'block', index: blockIndex, id: Date.now() + 3 });
         nextCompletedUnitKeys.push(blockKey);
         lineCleared = true;
+        blockJustCompleted = true;
+        completedUnitsCount++;
       }
 
       if (lineCleared) {
@@ -1016,6 +1077,153 @@ export const useGameStore = create<GameState>((set, get) => ({
       }
     }
 
+    // --- PERSONALITY EVENT LOGIC ---
+    let nextConsecutiveCorrect = get().consecutiveCorrectPlayerMoves;
+    let nextCorrectSinceError = get().correctMovesSinceLastError;
+    let nextHasUnprotectedError = get().hasUnprotectedErrorSinceLastComeback;
+    let nextHasReachedNumbra = get().hasReachedNumbraModeThisGame;
+
+    if (source === 'player') {
+      if (isError) {
+        nextConsecutiveCorrect = 0;
+        nextCorrectSinceError = 0;
+        // set unprotected error if shield is not armed
+        if (get().mistakeShieldState !== 'armed') {
+          nextHasUnprotectedError = true;
+        }
+      } else {
+        nextConsecutiveCorrect += 1;
+        nextCorrectSinceError += 1;
+      }
+    } else if (source === 'hint') {
+      nextConsecutiveCorrect = 0;
+      nextCorrectSinceError = 0;
+    }
+
+    const reachedNumbraMode = !nextHasReachedNumbra && nextCombo >= 8;
+    if (reachedNumbraMode) {
+      nextHasReachedNumbra = true;
+    }
+
+    // Evaluate isUnitAlmostComplete
+    let isUnitAlmostComplete = false;
+    if (!isError) {
+      let rowCorrectCount = 0;
+      let colCorrectCount = 0;
+      let blockCorrectCount = 0;
+      for (let x = 0; x < 9; x++) {
+        if (newBoard[row][x].value === solution[row][x] && !newBoard[row][x].isError) rowCorrectCount++;
+        if (newBoard[x][col].value === solution[x][col] && !newBoard[x][col].isError) colCorrectCount++;
+      }
+      const startRow = Math.floor(row / 3) * 3;
+      const startCol = Math.floor(col / 3) * 3;
+      for (let i = 0; i < 3; i++) {
+        for (let j = 0; j < 3; j++) {
+          const r = startRow + i;
+          const c = startCol + j;
+          if (newBoard[r][c].value === solution[r][c] && !newBoard[r][c].isError) {
+            blockCorrectCount++;
+          }
+        }
+      }
+      if (rowCorrectCount === 8 || colCorrectCount === 8 || blockCorrectCount === 8) {
+        isUnitAlmostComplete = true;
+      }
+    }
+
+    const themeProfile = getThemeFeedbackProfile(get().theme);
+    const pTone = themeProfile.personalityTone;
+
+    const wasPlayShieldAbsorbed = isError && source === 'player' && get().mistakeShieldState === 'armed';
+
+    const pContext: GameplayEventContext = {
+      consecutiveCorrectPlayerMoves: nextConsecutiveCorrect,
+      correctMovesSinceLastError: nextCorrectSinceError,
+      hasUnprotectedErrorSinceLastComeback: nextHasUnprotectedError,
+      rowComplete: rowJustCompleted,
+      colComplete: colJustCompleted,
+      blockComplete: blockJustCompleted,
+      completedUnitsCount,
+      reachedNumbraMode,
+      isNakedSingle,
+      isUnitAlmostComplete,
+      isShieldAbsorbed: wasPlayShieldAbsorbed,
+    };
+
+    const triggeredType = getTriggeredPersonalityEvent(source, isError, pContext, pTone);
+
+    let nextQueue = [...get().personalityQueue];
+    let nextLowPriorityTime = get().lastLowPriorityTriggeredAt;
+    const nextTriggeredThisGame = [...get().triggeredTypesThisGame];
+
+    if (won) {
+      nextQueue = [];
+    } else if (triggeredType) {
+      const now = Date.now();
+      const priority = EVENT_PRIORITY[triggeredType];
+      let shouldAdd = true;
+
+      if (priority === 'low') {
+        if (now - get().lastLowPriorityTriggeredAt < 6000) {
+          shouldAdd = false;
+        }
+      }
+
+      // Deduplication: no repeating same type in the last 10s
+      const hasRecentOfSameType = nextQueue.some(e => e.type === triggeredType && (now - e.createdAt < 10000));
+      if (hasRecentOfSameType) {
+        shouldAdd = false;
+      }
+
+      // Once per game for low-priority: do not repeat same low-priority message more than once per game
+      if (priority === 'low' && get().triggeredTypesThisGame.includes(triggeredType)) {
+        shouldAdd = false;
+      }
+
+      if (shouldAdd) {
+        const text = getPersonalityMessage(pTone, triggeredType);
+        const newEvent: PersonalityEvent = {
+          id: `${triggeredType}-${now}-${Math.random()}`,
+          type: triggeredType,
+          priority,
+          messageKey: text,
+          createdAt: now,
+          expiresAt: now + (priority === 'high' ? 2200 : 1800),
+        };
+
+        if (nextQueue.length >= 3) {
+          if (priority === 'high' || priority === 'medium') {
+            const lowPriorityIndex = nextQueue.findIndex(e => e.priority === 'low');
+            if (lowPriorityIndex !== -1) {
+              nextQueue.splice(lowPriorityIndex, 1);
+            } else {
+              nextQueue.shift();
+            }
+          } else {
+            shouldAdd = false;
+          }
+        }
+
+        if (shouldAdd) {
+          nextQueue.push(newEvent);
+          if (!nextTriggeredThisGame.includes(triggeredType)) {
+            nextTriggeredThisGame.push(triggeredType);
+          }
+          if (priority === 'low') {
+            nextLowPriorityTime = now;
+          }
+
+          setTimeout(() => {
+            get().removePersonalityEvent(newEvent.id);
+          }, newEvent.expiresAt - now);
+        }
+      }
+    }
+
+    if (triggeredType && triggeredType === 'comeback' && nextHasUnprotectedError) {
+      nextHasUnprotectedError = false;
+    }
+
     set({ 
       board: newBoard, 
       mistakes: newMistakes, 
@@ -1026,7 +1234,14 @@ export const useGameStore = create<GameState>((set, get) => ({
       currentCombo: nextCombo,
       maxComboThisGame: nextMaxCombo,
       lastComboMilestone: nextMilestone,
-      mistakeShieldState: shieldState
+      mistakeShieldState: shieldState,
+      personalityQueue: nextQueue,
+      lastLowPriorityTriggeredAt: nextLowPriorityTime,
+      triggeredTypesThisGame: nextTriggeredThisGame,
+      consecutiveCorrectPlayerMoves: nextConsecutiveCorrect,
+      correctMovesSinceLastError: nextCorrectSinceError,
+      hasUnprotectedErrorSinceLastComeback: nextHasUnprotectedError,
+      hasReachedNumbraModeThisGame: nextHasReachedNumbra,
     });
 
     if (newCompletedLines.length > completedLines.length) {
@@ -1114,6 +1329,10 @@ export const useGameStore = create<GameState>((set, get) => ({
   },
 
   clearSurprise: () => set({ lastSurprise: null }),
+
+  removePersonalityEvent: (id: string) => set((state) => ({
+    personalityQueue: state.personalityQueue.filter(e => e.id !== id)
+  })),
 
   revealHint: () => {
     const { isScanning, isWon, isPaused, activeHint } = get();

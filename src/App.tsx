@@ -11,6 +11,7 @@ import { Controls } from './components/Controls';
 import { NumberPad } from './components/NumberPad';
 import { Header } from './components/Header';
 import { SurpriseOverlay } from './components/SurpriseOverlay';
+import { PersonalityOverlay } from './components/PersonalityOverlay';
 import { Confetti } from './components/Confetti';
 import { StatsModal } from './components/StatsModal';
 import { EducationalHint } from './components/EducationalHint';
@@ -78,11 +79,14 @@ export default function App() {
   }
 
   return (
-    <div className={cn(
-      "fixed inset-0 flex justify-center font-sans overflow-hidden transition-colors duration-700",
-      `theme-${theme}`,
-      "bg-gradient-to-b from-game-bg-start to-game-bg-end text-game-text-primary"
-    )}>
+    <div 
+      data-feedback-profile={theme}
+      className={cn(
+        "fixed inset-0 flex justify-center font-sans overflow-hidden transition-colors duration-700",
+        `theme-${theme}`,
+        "bg-gradient-to-b from-game-bg-start to-game-bg-end text-game-text-primary"
+      )}
+    >
       {/* Background glow effect */}
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-game-accent-start/10 rounded-full blur-[120px] pointer-events-none transition-colors duration-700" />
       
@@ -97,6 +101,7 @@ export default function App() {
           <FlowBadge />
           <Board />
           <Controls />
+          <PersonalityOverlay />
         </div>
 
         <NumberPad />
