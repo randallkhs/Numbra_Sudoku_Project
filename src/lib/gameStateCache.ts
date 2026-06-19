@@ -9,6 +9,7 @@ export interface SavedGameState {
   difficulty: Difficulty;
   mistakes: number;
   timeElapsed: number;
+  hintsUsed?: number;
 }
 
 const LOCAL_GAME_STORAGE_KEY = 'sudoku_saved_game';
@@ -73,6 +74,7 @@ export const saveGameState = async (state: SavedGameState) => {
         difficulty: state.difficulty,
         mistakes: state.mistakes,
         timeElapsed: state.timeElapsed,
+        hintsUsed: state.hintsUsed ?? 0,
         board: flattenBoard(state.board),
         solution: flattenSolution(state.solution)
       };

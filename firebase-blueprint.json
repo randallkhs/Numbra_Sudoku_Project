@@ -20,7 +20,8 @@
         "solution": { "type": "array" },
         "difficulty": { "type": "string" },
         "mistakes": { "type": "number" },
-        "timeElapsed": { "type": "number" }
+        "timeElapsed": { "type": "number" },
+        "hintsUsed": { "type": "number" }
       }
     }
   },

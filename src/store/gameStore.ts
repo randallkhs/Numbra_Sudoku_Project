@@ -44,6 +44,7 @@ interface GameState {
   isPlaying: boolean;
   isPaused: boolean;
   isWon: boolean;
+  hintsUsed: number;
   
   isScanning: boolean;
   scanningCell: [number, number] | null;
@@ -105,6 +106,7 @@ export const useGameStore = create<GameState>((set, get) => ({
   isPlaying: false,
   isPaused: false,
   isWon: false,
+  hintsUsed: 0,
   
   isScanning: false,
   scanningCell: null,
@@ -160,6 +162,7 @@ export const useGameStore = create<GameState>((set, get) => ({
       isPlaying: true,
       isPaused: false,
       isWon: false,
+      hintsUsed: 0,
       lastSurprise: null,
       completedLines: [],
       animationEvents: [],
@@ -181,6 +184,7 @@ export const useGameStore = create<GameState>((set, get) => ({
         isPlaying: true,
         isPaused: false,
         isWon: false,
+        hintsUsed: (saved as any).hintsUsed || 0,
         selectedCell: null,
         notesMode: false,
         lastSurprise: null,
@@ -548,7 +552,10 @@ export const useGameStore = create<GameState>((set, get) => ({
 
     const [targetR, targetC] = target;
 
-    set({ isScanning: true });
+    set((state) => ({ 
+      isScanning: true,
+      hintsUsed: state.hintsUsed + 1
+    }));
     
     let scanCount = 0;
     const maxScans = 15;
@@ -730,6 +737,7 @@ useGameStore.subscribe((state, prevState) => {
         difficulty: state.difficulty,
         mistakes: state.mistakes,
         timeElapsed: state.timeElapsed,
+        hintsUsed: state.hintsUsed,
       });
     }
   }

@@ -14,6 +14,7 @@ export const Cell: React.FC<CellProps> = ({ row, col, delayIndex, triggerBloom }
   const cellState = useGameStore(state => state.board[row][col]);
   const selectedCell = useGameStore(state => state.selectedCell);
   const scanningCell = useGameStore(state => state.scanningCell);
+  const isWon = useGameStore(state => state.isWon);
   
   // Reactively track the selected cell's value so same-value highlighting updates dynamically
   const selectedCellValue = useGameStore(state => {
@@ -111,7 +112,34 @@ export const Cell: React.FC<CellProps> = ({ row, col, delayIndex, triggerBloom }
   let cellAnimate: any = {};
   let cellTransition: any = {};
 
-  if (reducedMotion) {
+  if (isWon) {
+    if (reducedMotion) {
+      cellAnimate = {
+        opacity: [1, 0.5, 1],
+        backgroundColor: ["var(--color-game-surface)", "var(--color-game-accent-subtle)", "var(--color-game-surface)"]
+      };
+      cellTransition = {
+        delay: (row + col) * 0.05,
+        duration: 1.0,
+      };
+    } else {
+      cellAnimate = {
+        scale: [1, 1.25, 0.95, 1.05, 1],
+        rotate: [0, 8, -6, 2, 0],
+        backgroundColor: ["var(--color-game-surface)", "rgba(16, 185, 129, 0.15)", "var(--color-game-surface)"],
+        boxShadow: [
+          "inset 0 0 0px transparent",
+          "inset 0 0 25px var(--color-game-accent-light)",
+          "inset 0 0 0px transparent"
+        ]
+      };
+      cellTransition = {
+        delay: (row + col) * 0.08,
+        duration: 2.0,
+        ease: "easeInOut"
+      };
+    }
+  } else if (reducedMotion) {
     // Elegant opacity crossfades
     if (recentError && recentError.type === 'cell-error') {
       const isOwner = recentError.row === row && recentError.col === col;
@@ -290,6 +318,18 @@ export const Cell: React.FC<CellProps> = ({ row, col, delayIndex, triggerBloom }
 
           {/* Light Pass container (contained inside cell boundaries) */}
           <div className="absolute inset-0 overflow-hidden pointer-events-none z-10 rounded-[4px]">
+            {isWon && !reducedMotion && (
+              <motion.div
+                initial={{ x: "-100%", opacity: 0 }}
+                animate={{ x: "200%", opacity: [0, 0.8, 0.4, 0] }}
+                transition={{
+                  delay: (row + col) * 0.08,
+                  duration: 0.9,
+                  ease: "easeInOut"
+                }}
+                className="absolute inset-0 bg-gradient-to-r from-transparent via-white/50 to-transparent pointer-events-none mix-blend-overlay skew-x-12 z-20"
+              />
+            )}
             {cellUnitEvents.filter(() => !reducedMotion).map((unitEvt) => {
               const cellIndexInUnit = unitEvt.cells.findIndex(([r, c]) => r === row && c === col);
               const unitEventIndex = globalRecentUnits.findIndex(e => e.id === unitEvt.id);

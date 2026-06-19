@@ -89,6 +89,15 @@ const Particle: React.FC<ParticleProps> = ({ index }) => {
 export const Confetti: React.FC = () => {
   const isWon = useGameStore(state => state.isWon);
   const [show, setShow] = useState(false);
+  const [reducedMotion, setReducedMotion] = useState(false);
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
+    setReducedMotion(mediaQuery.matches);
+    const listener = (e: MediaQueryListEvent) => setReducedMotion(e.matches);
+    mediaQuery.addEventListener('change', listener);
+    return () => mediaQuery.removeEventListener('change', listener);
+  }, []);
 
   useEffect(() => {
     if (isWon) {
@@ -100,11 +109,13 @@ export const Confetti: React.FC = () => {
     }
   }, [isWon]);
 
+  const activeParticleCount = reducedMotion ? 12 : PARTICLE_COUNT;
+
   return (
     <AnimatePresence>
       {show && (
         <div className="absolute inset-0 pointer-events-none overflow-hidden z-[100]" style={{ perspective: '1000px' }}>
-          {Array.from({ length: PARTICLE_COUNT }).map((_, i) => (
+          {Array.from({ length: activeParticleCount }).map((_, i) => (
             <Particle key={i} index={i} />
           ))}
         </div>
