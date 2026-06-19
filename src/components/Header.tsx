@@ -128,7 +128,7 @@ export function Header() {
 
       <AnimatePresence>
         {showSettings && (
-          <SettingsMenu key="settings" onClose={() => setShowSettings(false)} />
+          <SettingsMenu key="settings" menuId="settings" onClose={() => setShowSettings(false)} />
         )}
         {showDailyModal && (
           <DailyChallengeModal key="daily" onClose={() => setShowDailyModal(false)} />
@@ -138,7 +138,7 @@ export function Header() {
   );
 }
 
-function SettingsMenu({ onClose, key }: { onClose: () => void, key?: string | number }) {
+function SettingsMenu({ onClose, menuId }: { onClose: () => void, menuId?: string | number, key?: any }) {
     const { soundEnabled, toggleSound, hapticsEnabled, toggleHaptics, hapticIntensity, setHapticIntensity, theme, setTheme } = useGameStore();
 
   const [user, setUser] = useState(auth.currentUser);
@@ -160,7 +160,7 @@ function SettingsMenu({ onClose, key }: { onClose: () => void, key?: string | nu
 
   return (
     <motion.div 
-      key={key}
+      key={menuId}
       initial={{ opacity: 0, y: -20 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, scale: 0.95 }}
