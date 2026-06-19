@@ -40,13 +40,13 @@ interface NumButtonProps {
 const NumButton: React.FC<NumButtonProps> = ({ num, onClick, disabled, className }) => {
   return (
     <motion.button
-      whileTap={!disabled ? { scale: 0.85, rotate: -5, borderRadius: '25px' } : {}}
+      whileTap={!disabled ? { scale: 0.94, y: 1 } : {}}
       onClick={onClick}
       disabled={disabled}
       className={cn(
-        "h-[65px] w-full max-w-[65px] rounded-[18px] text-[22px] font-medium flex items-center justify-center transition-all duration-200 border",
-        disabled ? "opacity-30 cursor-not-allowed bg-game-surface border-game-border text-game-text-primary" : 
-        "bg-game-surface border-game-border text-game-text-primary hover:bg-game-surface-hover shadow-[0_4px_10px_rgba(0,0,0,0.1)] active:shadow-none translate-y-0 active:translate-y-1",
+        "h-[62px] w-full max-w-[62px] rounded-[20px] text-[22px] font-semibold flex items-center justify-center transition-all duration-150 select-none border border-white/5",
+        disabled ? "opacity-20 cursor-not-allowed bg-game-surface border-game-border text-game-text-primary shadow-none" : 
+        "bg-game-surface border-game-border text-game-text-primary hover:bg-white/[0.04] hover:shadow-[0_8px_20px_-5px_var(--color-game-accent-subtle)] active:shadow-none translate-y-0 hover:-translate-y-0.5 cursor-pointer shadow-[0_6px_15px_rgba(0,0,0,0.2),inset_0_1px_0_rgba(255,255,255,0.05)]",
         className
       )}
     >

@@ -63,19 +63,19 @@ export function Board() {
   }
 
   return (
-    <div className="relative w-full max-w-[400px] mx-auto p-4 perspective-1000">
+    <div className="relative w-full max-w-[420px] mx-auto px-2 sm:px-4 py-2 sm:py-4 perspective-1000">
       <motion.div
         key={gameKey}
         initial={{ opacity: 0, scale: 0.9, rotate: -2 }}
         animate={isWon ? winAnimation : { opacity: 1, scale: 1, rotate: 0 }}
         transition={{ duration: isWon ? 1.5 : 0.6, ease: isWon ? "easeInOut" : "easeOut" }}
-        className={`w-full aspect-square grid grid-cols-9 grid-rows-9 bg-game-surface border-[2px] rounded-[20px] overflow-hidden backdrop-blur-md relative transition-all duration-500 ease-out ${comboGlowClass}`}
+        className={`w-full aspect-square grid grid-cols-9 grid-rows-9 bg-game-surface/80 border-[2.5px] rounded-[24px] overflow-hidden backdrop-blur-xl relative transition-all duration-500 ease-out ring-1 ring-white/10 ring-inset shadow-[0_25px_60px_-15px_rgba(0,0,0,0.5)] ${comboGlowClass}`}
       >
-        {/* Thick Block dividers mapping the 3x3 layout globally */}
-        <div className="absolute top-0 bottom-0 left-[calc(100%/3)] w-[2px] bg-game-border-strong z-20 pointer-events-none" />
-        <div className="absolute top-0 bottom-0 left-[calc(100%*2/3)] w-[2px] bg-game-border-strong z-20 pointer-events-none" />
-        <div className="absolute left-0 right-0 top-[calc(100%/3)] h-[2px] bg-game-border-strong z-20 pointer-events-none" />
-        <div className="absolute left-0 right-0 top-[calc(100%*2/3)] h-[2px] bg-game-border-strong z-20 pointer-events-none" />
+        {/* Thick Block dividers mapping the 3x3 layout globally with increased visual crispness */}
+        <div className="absolute top-0 bottom-0 left-[calc(100%/3)] w-[2.5px] bg-game-border-strong opacity-90 z-20 pointer-events-none" />
+        <div className="absolute top-0 bottom-0 left-[calc(100%*2/3)] w-[2.5px] bg-game-border-strong opacity-90 z-20 pointer-events-none" />
+        <div className="absolute left-0 right-0 top-[calc(100%/3)] h-[2.5px] bg-game-border-strong opacity-90 z-20 pointer-events-none" />
+        <div className="absolute left-0 right-0 top-[calc(100%*2/3)] h-[2.5px] bg-game-border-strong opacity-90 z-20 pointer-events-none" />
 
         {/* Dynamic board-wide light sweep animation on win */}
         {isWon && !reducedMotion && (

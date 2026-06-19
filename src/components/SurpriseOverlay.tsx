@@ -283,28 +283,28 @@ Hints: ${hintsUsed ?? 0}${flowText}`;
       )}
 
       {lastSurprise === 'bruh' && (
-        <SurpriseMessage key="surprise-bruh" emoji="🤦‍♂️" text="Bruh... 3 mistakes! Let's focus." />
+        <SurpriseMessage key="surprise-bruh" messageId="surprise-bruh" emoji="🤦‍♂️" text="Bruh... 3 mistakes! Let's focus." />
       )}
       
       {lastSurprise === 'wrong_number' && (
-        <SurpriseMessage key="surprise-wrong" emoji="🚨" text="Oops, incorrect logic!" />
+        <SurpriseMessage key="surprise-wrong" messageId="surprise-wrong" emoji="🚨" text="Oops, incorrect logic!" />
       )}
 
       {lastSurprise === 'lucky_7' && (
-        <SurpriseMessage key="surprise-lucky" emoji="🎰" text="Lucky 7 right in the center!" />
+        <SurpriseMessage key="surprise-lucky" messageId="surprise-lucky" emoji="🎰" text="Lucky 7 right in the center!" />
       )}
 
       {lastSurprise === 'line_clear' && (
-        <SurpriseMessage key="surprise-clear" emoji="✨" text="Section unlocked!" />
+        <SurpriseMessage key="surprise-clear" messageId="surprise-clear" emoji="✨" text="Section unlocked!" />
       )}
     </AnimatePresence>
   );
 }
 
-function SurpriseMessage({ emoji, text, durationMs = 3000, title = "THE SYSTEM SAYS:", key }: { emoji: string, text: string, durationMs?: number, title?: string, key?: string | number }) {
+function SurpriseMessage({ emoji, text, durationMs = 3000, title = "THE SYSTEM SAYS:", messageId }: { emoji: string, text: string, durationMs?: number, title?: string, messageId?: string | number, key?: string | number }) {
   return (
     <motion.div
-      key={key}
+      key={messageId}
       initial={{ opacity: 0, y: -50, scale: 0.8 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
       exit={{ opacity: 0, y: -20, scale: 0.8 }}

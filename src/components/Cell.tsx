@@ -282,14 +282,14 @@ export const Cell: React.FC<CellProps> = ({ row, col, delayIndex, triggerBloom }
       whileTap={{ scale: 0.9 }}
       onClick={() => selectCell(row, col)}
       className={cn(
-        'w-full h-full flex items-center justify-center text-lg sm:text-2xl font-medium cursor-pointer transition-colors duration-200 select-none relative',
+        'w-full h-full flex items-center justify-center text-lg sm:text-2xl font-medium cursor-pointer transition-all duration-300 select-none relative focus:outline-none',
         borderClasses,
         bloom && 'animate-bloom',
-        cellState.isError ? 'bg-game-error-bg text-game-error' : 
+        cellState.isError ? 'bg-game-error-bg text-game-error ring-2 ring-game-error/40 z-10' : 
         isScanned ? 'bg-white shadow-[0_0_20px_white] z-50 transition-none scale-105 duration-75' :
-        isSelected ? 'bg-gradient-to-br from-game-accent-start/40 to-game-accent-end/40 text-white z-10 border-game-accent-light' :
-        isSameValue ? 'bg-game-accent-subtle text-game-accent-light z-0' :
-        isRelated ? 'bg-game-surface animate-crosshair z-0' : 'bg-game-surface hover:bg-game-surface-hover z-0',
+        isSelected ? 'bg-gradient-to-br from-game-accent-start/35 to-game-accent-end/35 text-white z-25 ring-2 ring-game-accent-light shadow-[inset_0_0_12px_rgba(255,255,255,0.15),0_0_15px_var(--color-game-accent-subtle)]' :
+        isSameValue ? 'bg-game-accent-subtle/50 text-game-accent-light font-bold z-10 shadow-[inset_0_0_6px_var(--color-game-accent-subtle)] border border-game-accent-light/20 scale-[0.98]' :
+        isRelated ? 'bg-game-surface/60 animate-crosshair z-0 border border-white/5 opacity-85' : 'bg-game-surface/[0.02] hover:bg-white/[0.04] z-0',
         cellState.isInitial ? 'text-game-text-primary font-semibold' : 'text-game-accent-light font-light'
       )}
     >

@@ -21,6 +21,35 @@
   --color-game-error-bg: var(--color-game-error-bg, #f00);
 }
 
+:root {
+  --motion-fast: 150ms;
+  --motion-medium: 300ms;
+  --motion-slow: 600ms;
+  --ease-premium: cubic-bezier(0.16, 1, 0.3, 1);
+  --glow-soft: 0 0 16px var(--color-game-accent-subtle);
+  --glow-strong: 0 0 35px var(--color-game-accent-light);
+}
+
+/* Reduced Motion Strategy */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-delay: 0s !important;
+    animation-duration: 0s !important;
+    animation-iteration-count: 0 !important;
+    transition-duration: 0.1s !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Accessibility: premium focus visible styling */
+button:focus-visible, 
+[role="button"]:focus-visible, 
+input:focus-visible, 
+select:focus-visible {
+  outline: 2px solid var(--color-game-accent-light);
+  outline-offset: 4px;
+}
+
 :root, .theme-cosmic {
   --color-game-bg-start: #0d0d12;
   --color-game-bg-end: #161621;
