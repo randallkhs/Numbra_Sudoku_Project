@@ -4,6 +4,9 @@ import { useGameStore } from '../store/gameStore';
 import { X, Trophy, Timer, Flame, Award, Zap } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { StatsChart } from './StatsChart';
+import { ProgressionChart } from './ProgressionChart';
+import { ConsistencyGauge } from './ConsistencyGauge';
+import { DifficultyAverages } from './DifficultyAverages';
 
 export const StatsModal: React.FC = () => {
   const { showStats, toggleStats, stats } = useGameStore();
@@ -120,8 +123,14 @@ export const StatsModal: React.FC = () => {
                         </div>
                       </div>
 
-                      <div className="col-span-2">
+                      <div className="col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <ConsistencyGauge />
+                        <DifficultyAverages />
+                      </div>
+
+                      <div className="col-span-2 flex flex-col gap-4">
                         <StatsChart />
+                        <ProgressionChart />
                       </div>
                     </motion.div>
                   ) : (
