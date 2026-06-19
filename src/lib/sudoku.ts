@@ -122,7 +122,23 @@ export function solveSudoku(board: number[][]): boolean {
   return false;
 }
 
-export function solveSudokuWithMRVAndShuffle(board: number[][]): boolean {
+export function createPRNG(seed: string): () => number {
+  let h = 1779033703 ^ seed.length;
+  for (let i = 0; i < seed.length; i++) {
+    h = Math.imul(h ^ seed.charCodeAt(i), 3432918353);
+    h = h << 13 | h >>> 19;
+  }
+  let a = (h ^ (h >>> 16)) >>> 0;
+  return function() {
+    a >>>= 0;
+    a = (a + 0x9e3779b9) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+export function solveSudokuWithMRVAndShuffle(board: number[][], random: () => number = Math.random): boolean {
   const mrv = findMRVCell(board);
   if (mrv === null) {
     return true;
@@ -134,13 +150,13 @@ export function solveSudokuWithMRVAndShuffle(board: number[][]): boolean {
 
   const shuffledCandidates = [...mrv.candidates];
   for (let i = shuffledCandidates.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
+    const j = Math.floor(random() * (i + 1));
     [shuffledCandidates[i], shuffledCandidates[j]] = [shuffledCandidates[j], shuffledCandidates[i]];
   }
 
   for (const num of shuffledCandidates) {
     board[mrv.row][mrv.col] = num;
-    if (solveSudokuWithMRVAndShuffle(board)) {
+    if (solveSudokuWithMRVAndShuffle(board, random)) {
       return true;
     }
     board[mrv.row][mrv.col] = 0;
@@ -148,7 +164,11 @@ export function solveSudokuWithMRVAndShuffle(board: number[][]): boolean {
   return false;
 }
 
-export function generateSudoku(difficulty: Difficulty): { puzzle: number[][]; solution: number[][] } {
+export function generateSudoku(
+  difficulty: Difficulty,
+  options?: { seed?: string }
+): { puzzle: number[][]; solution: number[][] } {
+  const random = options?.seed ? createPRNG(options.seed) : Math.random;
   const solution = createEmptyBoard();
   
   const fillDiagonal = () => {
@@ -162,7 +182,7 @@ export function generateSudoku(difficulty: Difficulty): { puzzle: number[][]; so
     for (let i = 0; i < 3; i++) {
       for (let j = 0; j < 3; j++) {
         do {
-          num = Math.floor(Math.random() * 9) + 1;
+          num = Math.floor(random() * 9) + 1;
         } while (!isValidInBlock(solution, rowStart, colStart, num));
         solution[rowStart + i][colStart + j] = num;
       }
@@ -179,7 +199,7 @@ export function generateSudoku(difficulty: Difficulty): { puzzle: number[][]; so
   };
 
   fillDiagonal();
-  solveSudokuWithMRVAndShuffle(solution);
+  solveSudokuWithMRVAndShuffle(solution, random);
 
   const puzzle = solution.map(row => [...row]);
   
@@ -193,7 +213,7 @@ export function generateSudoku(difficulty: Difficulty): { puzzle: number[][]; so
 
   const cellPositions = Array.from({ length: 81 }, (_, i) => i);
   for (let i = cellPositions.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
+    const j = Math.floor(random() * (i + 1));
     [cellPositions[i], cellPositions[j]] = [cellPositions[j], cellPositions[i]];
   }
 

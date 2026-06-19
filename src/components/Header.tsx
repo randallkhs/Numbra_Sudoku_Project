@@ -3,13 +3,27 @@ import { motion, AnimatePresence } from 'motion/react';
 import { useGameStore } from '../store/gameStore';
 import { Difficulty } from '../lib/sudoku';
 import { cn } from '../lib/utils';
-import { Volume2, VolumeX, Vibrate, VibrateOff, Settings, X, Palette, BarChart2, Sparkles, User, LogOut } from 'lucide-react';
+import { Volume2, VolumeX, Vibrate, VibrateOff, Settings, X, Palette, BarChart2, Sparkles, User, LogOut, Calendar } from 'lucide-react';
 import { auth, loginWithGoogle, logoutUser } from '../lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
+import { DailyChallengeModal } from './DailyChallengeModal';
 
 export function Header() {
-  const { mistakes, timeElapsed, difficulty, startNewGame, isPlaying, isPaused, tickTimer, toggleStats } = useGameStore();
+  const { 
+    mistakes, 
+    timeElapsed, 
+    difficulty, 
+    startNewGame, 
+    isPlaying, 
+    isPaused, 
+    tickTimer, 
+    toggleStats,
+    dailyStreak,
+    isDailyChallenge,
+    dailyChallengeDate
+  } = useGameStore();
   const [showSettings, setShowSettings] = useState(false);
+  const [showDailyModal, setShowDailyModal] = useState(false);
 
   useEffect(() => {
     let interval: NodeJS.Timeout;
@@ -32,7 +46,7 @@ export function Header() {
       <motion.header 
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="flex flex-col gap-4 w-full max-w-[400px] mx-auto pt-8 px-4 pb-2"
+        className="flex flex-col gap-3 w-full max-w-[400px] mx-auto pt-8 px-4 pb-2"
       >
         <div className="flex justify-between items-center">
           <div className="flex items-center gap-3">
@@ -47,6 +61,21 @@ export function Header() {
               >
                 <BarChart2 size={18} />
               </button>
+              
+              {/* Daily Challenge Trigger */}
+              <button 
+                onClick={() => setShowDailyModal(true)}
+                className="h-8 rounded-full px-2 flex items-center gap-1 text-game-text-secondary hover:text-game-text-primary hover:bg-game-surface transition-colors focus:outline-none"
+                title="Daily Challenge Menu"
+              >
+                <Calendar size={18} className="text-amber-400 animate-pulse" />
+                {dailyStreak.currentStreak > 0 && (
+                  <span className="text-[10px] font-mono font-bold text-amber-500">
+                    🔥{dailyStreak.currentStreak}
+                  </span>
+                )}
+              </button>
+
               <button 
                 onClick={() => setShowSettings(true)}
                 className="w-8 h-8 rounded-full flex items-center justify-center text-game-text-secondary hover:text-game-text-primary hover:bg-game-surface transition-colors focus:outline-none"
@@ -66,6 +95,18 @@ export function Header() {
             </div>
           </div>
         </div>
+
+        {/* Daily Challenge active banner status */}
+        {isDailyChallenge && dailyChallengeDate && (
+          <div className="flex justify-between items-center bg-amber-500/10 border border-amber-500/20 px-3 py-1.5 rounded-2xl">
+            <span className="text-[10px] font-mono font-extrabold text-amber-400 uppercase tracking-widest flex items-center gap-1">
+              ⭐ DAILY CHALLENGE ACTIVE
+            </span>
+            <span className="text-[10px] font-mono text-amber-300 font-bold">
+              {dailyChallengeDate}
+            </span>
+          </div>
+        )}
         
         <div className="flex justify-between bg-game-surface p-1 rounded-[20px] border border-game-border backdrop-blur-md">
           {(['easy', 'medium', 'hard', 'expert'] as Difficulty[]).map(d => (
@@ -88,6 +129,9 @@ export function Header() {
       <AnimatePresence>
         {showSettings && (
           <SettingsMenu key="settings" onClose={() => setShowSettings(false)} />
+        )}
+        {showDailyModal && (
+          <DailyChallengeModal key="daily" onClose={() => setShowDailyModal(false)} />
         )}
       </AnimatePresence>
     </>

@@ -32,6 +32,134 @@ export type CellState = {
   isError: boolean;
 };
 
+export interface DailyChallengeResult {
+  date: string; // YYYY-MM-DD
+  difficulty: Difficulty;
+  completed: boolean;
+  timeElapsed: number;
+  mistakes: number;
+  hintsUsed: number;
+  maxCombo: number;
+  isPractice?: boolean;
+}
+
+export interface DailyStreakState {
+  currentStreak: number;
+  bestStreak: number;
+  lastCompletedDate: string | null; // YYYY-MM-DD
+}
+
+export function getLocalDateString(date: Date = new Date()): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+export function getYesterdayDateString(dateStr: string): string {
+  const date = new Date(dateStr + "T12:00:00");
+  date.setDate(date.getDate() - 1);
+  return getLocalDateString(date);
+}
+
+const loadDailyHistory = (): DailyChallengeResult[] => {
+  try {
+    const raw = localStorage.getItem('numbra_daily_history');
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+};
+
+const saveDailyHistory = (history: DailyChallengeResult[]) => {
+  try {
+    localStorage.setItem('numbra_daily_history', JSON.stringify(history));
+  } catch (e) {
+    console.error(e);
+  }
+};
+
+const loadDailyStreak = (): DailyStreakState => {
+  try {
+    const raw = localStorage.getItem('numbra_daily_streak');
+    return raw ? JSON.parse(raw) : { currentStreak: 0, bestStreak: 0, lastCompletedDate: null };
+  } catch {
+    return { currentStreak: 0, bestStreak: 0, lastCompletedDate: null };
+  }
+};
+
+const saveDailyStreak = (streak: DailyStreakState) => {
+  try {
+    localStorage.setItem('numbra_daily_streak', JSON.stringify(streak));
+  } catch (e) {
+    console.error(e);
+  }
+};
+
+const registerDailyCompletion = (
+  date: string,
+  difficulty: Difficulty,
+  timeElapsed: number,
+  mistakes: number,
+  hintsUsed: number,
+  maxCombo: number,
+  isPracticePlay: boolean
+): DailyStreakState => {
+  const history = loadDailyHistory();
+  const streak = loadDailyStreak();
+
+  const existingChallenge = history.find(h => h.date === date && !h.isPractice);
+
+  const entry: DailyChallengeResult = {
+    date,
+    difficulty,
+    completed: true,
+    timeElapsed,
+    mistakes,
+    hintsUsed,
+    maxCombo,
+    isPractice: isPracticePlay || !!existingChallenge
+  };
+
+  history.push(entry);
+  saveDailyHistory(history);
+
+  if (!entry.isPractice) {
+    let { currentStreak, bestStreak, lastCompletedDate } = streak;
+    
+    if (lastCompletedDate === null) {
+      currentStreak = 1;
+    } else if (lastCompletedDate === date) {
+      // Already completed today
+    } else {
+      const yesterday = getYesterdayDateString(date);
+      if (lastCompletedDate === yesterday) {
+        currentStreak += 1;
+      } else {
+        currentStreak = 1;
+      }
+    }
+    
+    bestStreak = Math.max(bestStreak, currentStreak);
+    lastCompletedDate = date;
+
+    const newStreak = { currentStreak, bestStreak, lastCompletedDate };
+    saveDailyStreak(newStreak);
+    return newStreak;
+  }
+  
+  return streak;
+};
+
+export interface HistorySnapshot {
+  board: CellState[][];
+  mistakes: number;
+  currentCombo: number;
+  maxComboThisGame: number;
+  lastComboMilestone: number | null;
+  hintsUsed?: number;
+}
+
 interface GameState {
   board: CellState[][];
   solution: number[][];
@@ -45,6 +173,17 @@ interface GameState {
   isPaused: boolean;
   isWon: boolean;
   hintsUsed: number;
+
+  // Daily challenges
+  isDailyChallenge: boolean;
+  dailyChallengeDate: string | null;
+  dailyChallengeDifficulty: Difficulty | null;
+  isDailyPractice: boolean;
+  dailyHistory: DailyChallengeResult[];
+  dailyStreak: DailyStreakState;
+  
+  undoStack: HistorySnapshot[];
+  redoStack: HistorySnapshot[];
   
   isScanning: boolean;
   scanningCell: [number, number] | null;
@@ -70,6 +209,7 @@ interface GameState {
 
   // Actions
   startNewGame: (difficulty: Difficulty) => void;
+  startDailyChallenge: (difficulty: Difficulty, dateStr: string, isPractice?: boolean) => void;
   loadSavedGameOrStartNew: () => Promise<void>;
   selectCell: (row: number, col: number) => void;
   inputNumber: (num: number) => void;
@@ -79,6 +219,8 @@ interface GameState {
   togglePause: () => void;
   clearSurprise: () => void;
   revealHint: () => void;
+  undo: () => void;
+  redo: () => void;
   toggleSound: () => void;
   toggleHaptics: () => void;
   setHapticIntensity: (intensity: 'low' | 'medium' | 'high') => void;
@@ -94,6 +236,33 @@ const loadStats = (): GameStats => {
   return { gamesWon: 0, averageTime: 0, currentStreak: 0, totalGamesFinished: 0, fastestFinish: null, achievements: [] };
 };
 
+const pushUndoState = (get: () => GameState, set: (state: any) => void) => {
+  const { board, mistakes, currentCombo, maxComboThisGame, lastComboMilestone, hintsUsed, undoStack } = get();
+  
+  const boardCopy = board.map(row => 
+    row.map(cell => ({
+      value: cell.value,
+      notes: new Set(cell.notes),
+      isInitial: cell.isInitial,
+      isError: cell.isError
+    }))
+  );
+
+  const snapshot: HistorySnapshot = {
+    board: boardCopy,
+    mistakes,
+    currentCombo,
+    maxComboThisGame,
+    lastComboMilestone,
+    hintsUsed,
+  };
+
+  set({
+    undoStack: [...undoStack, snapshot].slice(-50),
+    redoStack: [] // Clear redo on any new action!
+  });
+};
+
 export const useGameStore = create<GameState>((set, get) => ({
   board: [],
   solution: [],
@@ -107,6 +276,16 @@ export const useGameStore = create<GameState>((set, get) => ({
   isPaused: false,
   isWon: false,
   hintsUsed: 0,
+  undoStack: [],
+  redoStack: [],
+  
+  // Daily challenge states
+  isDailyChallenge: false,
+  dailyChallengeDate: null,
+  dailyChallengeDifficulty: null,
+  isDailyPractice: false,
+  dailyHistory: loadDailyHistory(),
+  dailyStreak: loadDailyStreak(),
   
   isScanning: false,
   scanningCell: null,
@@ -163,12 +342,62 @@ export const useGameStore = create<GameState>((set, get) => ({
       isPaused: false,
       isWon: false,
       hintsUsed: 0,
+      undoStack: [],
+      redoStack: [],
       lastSurprise: null,
       completedLines: [],
       animationEvents: [],
       currentCombo: 0,
       maxComboThisGame: 0,
       lastComboMilestone: null,
+      // Reset Daily Challenge states
+      isDailyChallenge: false,
+      dailyChallengeDate: null,
+      dailyChallengeDifficulty: null,
+      isDailyPractice: false,
+    });
+  },
+
+  startDailyChallenge: (difficulty, dateStr, isPractice = false) => {
+    haptic.medium();
+    audio.playDifficultySelect(difficulty);
+    const seed = `numbra-daily-${difficulty}-${dateStr}`;
+    const { puzzle, solution } = generateSudoku(difficulty, { seed });
+    
+    const boardState: CellState[][] = puzzle.map(row => 
+      row.map(val => ({
+        value: val,
+        notes: new Set(),
+        isInitial: val !== 0,
+        isError: false,
+      }))
+    );
+    
+    set({
+      board: boardState,
+      solution,
+      difficulty,
+      selectedCell: null,
+      notesMode: false,
+      mistakes: 0,
+      timeElapsed: 0,
+      isPlaying: true,
+      isPaused: false,
+      isWon: false,
+      hintsUsed: 0,
+      undoStack: [],
+      redoStack: [],
+      lastSurprise: null,
+      completedLines: [],
+      animationEvents: [],
+      currentCombo: 0,
+      maxComboThisGame: 0,
+      lastComboMilestone: null,
+      // Set Daily Challenge states
+      isDailyChallenge: true,
+      dailyChallengeDate: dateStr,
+      dailyChallengeDifficulty: difficulty,
+      isDailyPractice: isPractice,
     });
   },
 
@@ -185,6 +414,8 @@ export const useGameStore = create<GameState>((set, get) => ({
         isPaused: false,
         isWon: false,
         hintsUsed: (saved as any).hintsUsed || 0,
+        undoStack: [],
+        redoStack: [],
         selectedCell: null,
         notesMode: false,
         lastSurprise: null,
@@ -193,6 +424,10 @@ export const useGameStore = create<GameState>((set, get) => ({
         currentCombo: 0,
         maxComboThisGame: 0,
         lastComboMilestone: null,
+        isDailyChallenge: false,
+        dailyChallengeDate: null,
+        dailyChallengeDifficulty: null,
+        isDailyPractice: false,
       });
     } else {
       get().startNewGame('easy');
@@ -214,6 +449,8 @@ export const useGameStore = create<GameState>((set, get) => ({
     const cell = board[row][col];
     
     if (cell.isInitial || cell.value === num) return;
+
+    pushUndoState(get, set);
 
     if (notesMode) {
       haptic.light();
@@ -429,11 +666,11 @@ export const useGameStore = create<GameState>((set, get) => ({
         type: 'win'
       });
 
-      const { stats, timeElapsed, mistakes } = get();
+      const { stats, timeElapsed, isDailyChallenge, dailyChallengeDate, difficulty, hintsUsed, maxComboThisGame, isDailyPractice } = get();
       
       const achievements = new Set(stats.achievements || []);
       if (stats.gamesWon + 1 >= 10) achievements.add('Complete 10 games');
-      if (mistakes === 0) achievements.add('No mistakes');
+      if (newMistakes === 0) achievements.add('No mistakes');
       if (stats.fastestFinish === null || timeElapsed < stats.fastestFinish) achievements.add('Fastest finish');
       
       const newStats = {
@@ -447,6 +684,22 @@ export const useGameStore = create<GameState>((set, get) => ({
       };
       
       set({ stats: newStats });
+
+      if (isDailyChallenge && dailyChallengeDate) {
+        const streakState = registerDailyCompletion(
+          dailyChallengeDate,
+          difficulty,
+          timeElapsed,
+          newMistakes,
+          hintsUsed,
+          maxComboThisGame,
+          isDailyPractice
+        );
+        set({
+          dailyHistory: loadDailyHistory(),
+          dailyStreak: streakState
+        });
+      }
     }
 
     set({ 
@@ -490,6 +743,10 @@ export const useGameStore = create<GameState>((set, get) => ({
       audio.playError(difficulty);
       return;
     }
+
+    if (cell.value === 0) return;
+
+    pushUndoState(get, set);
 
     haptic.heavy();
     audio.playTick(difficulty);
@@ -720,6 +977,88 @@ export const useGameStore = create<GameState>((set, get) => ({
         return {};
       }
       return { animationEvents: remaining };
+    });
+  },
+
+  undo: () => {
+    const { isPlaying, isPaused, isScanning, undoStack, board, mistakes, currentCombo, maxComboThisGame, lastComboMilestone, hintsUsed, redoStack } = get();
+    if (!isPlaying || isPaused || isScanning || undoStack.length === 0) return;
+
+    haptic.medium();
+    audio.playTick();
+
+    const previousStack = [...undoStack];
+    const snapshot = previousStack.pop()!;
+
+    // Create current state snapshot to push onto redoStack
+    const boardCopy = board.map(row =>
+      row.map(cell => ({
+        value: cell.value,
+        notes: new Set(cell.notes),
+        isInitial: cell.isInitial,
+        isError: cell.isError
+      }))
+    );
+
+    const currentSnapshot: HistorySnapshot = {
+      board: boardCopy,
+      mistakes,
+      currentCombo,
+      maxComboThisGame,
+      lastComboMilestone,
+      hintsUsed,
+    };
+
+    set({
+      board: snapshot.board,
+      mistakes: snapshot.mistakes,
+      currentCombo: snapshot.currentCombo,
+      maxComboThisGame: snapshot.maxComboThisGame,
+      lastComboMilestone: snapshot.lastComboMilestone,
+      hintsUsed: snapshot.hintsUsed !== undefined ? snapshot.hintsUsed : hintsUsed,
+      undoStack: previousStack,
+      redoStack: [...redoStack, currentSnapshot]
+    });
+  },
+
+  redo: () => {
+    const { isPlaying, isPaused, isScanning, redoStack, board, mistakes, currentCombo, maxComboThisGame, lastComboMilestone, hintsUsed, undoStack } = get();
+    if (!isPlaying || isPaused || isScanning || redoStack.length === 0) return;
+
+    haptic.medium();
+    audio.playTick();
+
+    const nextStack = [...redoStack];
+    const snapshot = nextStack.pop()!;
+
+    // Create current snapshot to push to undoStack
+    const boardCopy = board.map(row =>
+      row.map(cell => ({
+        value: cell.value,
+        notes: new Set(cell.notes),
+        isInitial: cell.isInitial,
+        isError: cell.isError
+      }))
+    );
+
+    const currentSnapshot: HistorySnapshot = {
+      board: boardCopy,
+      mistakes,
+      currentCombo,
+      maxComboThisGame,
+      lastComboMilestone,
+      hintsUsed,
+    };
+
+    set({
+      board: snapshot.board,
+      mistakes: snapshot.mistakes,
+      currentCombo: snapshot.currentCombo,
+      maxComboThisGame: snapshot.maxComboThisGame,
+      lastComboMilestone: snapshot.lastComboMilestone,
+      hintsUsed: snapshot.hintsUsed !== undefined ? snapshot.hintsUsed : hintsUsed,
+      undoStack: [...undoStack, currentSnapshot],
+      redoStack: nextStack
     });
   }
 }));
