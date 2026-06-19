@@ -6,6 +6,7 @@ import { useGameStore } from '../store/gameStore';
 export function SurpriseOverlay() {
   const isWon = useGameStore(state => state.isWon);
   const lastSurprise = useGameStore(state => state.lastSurprise);
+  const maxComboThisGame = useGameStore(state => state.maxComboThisGame);
   const clearSurprise = useGameStore(state => state.clearSurprise);
 
   useEffect(() => {
@@ -58,6 +59,19 @@ export function SurpriseOverlay() {
           <p className="text-game-text-primary text-center font-medium">
             You solved the grid.
           </p>
+
+          {maxComboThisGame >= 2 && (
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ delay: 0.4 }}
+              className="mt-4 bg-game-accent-subtle border border-game-accent-start/30 px-5 py-2.5 rounded-[15px] flex items-center gap-2 text-sm font-mono text-game-accent-light"
+            >
+              <span>🔥 Max Flow Combo:</span>
+              <span className="font-bold text-game-text-primary text-base">{maxComboThisGame} Hits</span>
+            </motion.div>
+          )}
+
           <motion.button
             whileTap={{ scale: 0.95 }}
             onClick={() => useGameStore.getState().startNewGame(useGameStore.getState().difficulty)}

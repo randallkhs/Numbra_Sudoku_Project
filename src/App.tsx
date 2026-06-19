@@ -6,6 +6,7 @@
 import { useEffect, useState } from 'react';
 import { useGameStore } from './store/gameStore';
 import { Board } from './components/Board';
+import { FlowBadge } from './components/FlowBadge';
 import { Controls } from './components/Controls';
 import { NumberPad } from './components/NumberPad';
 import { Header } from './components/Header';
@@ -92,6 +93,7 @@ export default function App() {
         
         <div className="flex-1 flex flex-col justify-center gap-6 relative">
           <Confetti />
+          <FlowBadge />
           <Board />
           <Controls />
         </div>

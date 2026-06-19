@@ -57,6 +57,11 @@ interface GameState {
 
   showStats: boolean;
 
+  // Combos
+  currentCombo: number;
+  maxComboThisGame: number;
+  lastComboMilestone: number | null;
+
   // Surprises & Animations
   lastSurprise: string | null;
   completedLines: { type: 'row' | 'col' | 'block', index: number, id: number }[];
@@ -112,6 +117,10 @@ export const useGameStore = create<GameState>((set, get) => ({
   stats: loadStats(),
   showStats: false,
 
+  currentCombo: 0,
+  maxComboThisGame: 0,
+  lastComboMilestone: null,
+
   lastSurprise: null,
   completedLines: [],
   animationEvents: [],
@@ -154,6 +163,9 @@ export const useGameStore = create<GameState>((set, get) => ({
       lastSurprise: null,
       completedLines: [],
       animationEvents: [],
+      currentCombo: 0,
+      maxComboThisGame: 0,
+      lastComboMilestone: null,
     });
   },
 
@@ -173,7 +185,10 @@ export const useGameStore = create<GameState>((set, get) => ({
         notesMode: false,
         lastSurprise: null,
         completedLines: [],
-        animationEvents: []
+        animationEvents: [],
+        currentCombo: 0,
+        maxComboThisGame: 0,
+        lastComboMilestone: null,
       });
     } else {
       get().startNewGame('easy');
@@ -231,6 +246,10 @@ export const useGameStore = create<GameState>((set, get) => ({
     let surprise = null;
     let newCompletedLines = [...completedLines];
 
+    let nextCombo = get().currentCombo;
+    let nextMaxCombo = get().maxComboThisGame;
+    let nextMilestone = get().lastComboMilestone;
+
     if (isError) {
       haptic.error(); // no difficulty parameter needed
       audio.playError(difficulty);
@@ -247,6 +266,9 @@ export const useGameStore = create<GameState>((set, get) => ({
       });
       
       if (newMistakes === 3) surprise = 'bruh';
+
+      // LESS PUNISHING option: half the combo (rounded down) instead of a complete reset to 0
+      nextCombo = Math.floor(nextCombo / 2);
     } else {
       haptic.medium();
       audio.playTick(difficulty);
@@ -257,6 +279,16 @@ export const useGameStore = create<GameState>((set, get) => ({
         col,
         value: num
       });
+
+      nextCombo += 1;
+      if (nextCombo > nextMaxCombo) {
+        nextMaxCombo = nextCombo;
+      }
+
+      // Detect milestone entries
+      if (nextCombo === 2 || nextCombo === 3 || nextCombo === 5 || nextCombo === 8) {
+        nextMilestone = nextCombo;
+      }
 
       // Clear notes from same row, col, block immutably and push note-removed events where necessary
       for (let i = 0; i < 9; i++) {
@@ -418,7 +450,10 @@ export const useGameStore = create<GameState>((set, get) => ({
       isWon: won,
       isPlaying: !won,
       lastSurprise: surprise || get().lastSurprise,
-      completedLines: newCompletedLines 
+      completedLines: newCompletedLines,
+      currentCombo: nextCombo,
+      maxComboThisGame: nextMaxCombo,
+      lastComboMilestone: nextMilestone
     });
 
     if (newCompletedLines.length > completedLines.length) {

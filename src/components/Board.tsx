@@ -28,6 +28,8 @@ export function Board() {
     return () => clearInterval(timer);
   }, [clearOldAnimationEvents]);
 
+  const currentCombo = useGameStore(state => state.currentCombo);
+
   if (!board.length) return null;
 
   const gameKey = solution.length > 0 ? solution[0].join('') : 'init';
@@ -46,6 +48,20 @@ export function Board() {
     ]
   };
 
+  // Dynamic glow classes based on current flow state/combo
+  let comboGlowClass = "border-game-border-strong shadow-[inset_0_0_20px_rgba(0,0,0,0.5)]";
+  if (!isWon) {
+    if (currentCombo >= 8) {
+      comboGlowClass = "border-game-accent-light shadow-[0_0_35px_var(--color-game-accent-end),_inset_0_0_20px_rgba(0,0,0,0.4)]";
+    } else if (currentCombo >= 5) {
+      comboGlowClass = "border-game-accent-light/80 shadow-[0_0_20px_var(--color-game-accent-start),_inset_0_0_20px_rgba(0,0,0,0.4)]";
+    } else if (currentCombo >= 3) {
+      comboGlowClass = "border-game-border-strong shadow-[0_0_12px_rgba(79,70,229,0.45),_inset_0_0_20px_rgba(0,0,0,0.4)]";
+    } else if (currentCombo >= 2) {
+      comboGlowClass = "border-game-border-strong shadow-[0_0_8px_rgba(79,70,229,0.2),_inset_0_0_20px_rgba(0,0,0,0.4)]";
+    }
+  }
+
   return (
     <div className="relative w-full max-w-[400px] mx-auto p-4 perspective-1000">
       <motion.div
@@ -53,7 +69,7 @@ export function Board() {
         initial={{ opacity: 0, scale: 0.9, rotate: -2 }}
         animate={isWon ? winAnimation : { opacity: 1, scale: 1, rotate: 0 }}
         transition={{ duration: isWon ? 1.5 : 0.6, ease: isWon ? "easeInOut" : "easeOut" }}
-        className="w-full aspect-square grid grid-cols-9 grid-rows-9 bg-game-surface border-[2px] border-game-border-strong rounded-[20px] overflow-hidden shadow-[inset_0_0_20px_rgba(0,0,0,0.5)] backdrop-blur-md relative"
+        className={`w-full aspect-square grid grid-cols-9 grid-rows-9 bg-game-surface border-[2px] rounded-[20px] overflow-hidden backdrop-blur-md relative transition-all duration-500 ease-out ${comboGlowClass}`}
       >
         {/* Thick Block dividers mapping the 3x3 layout globally */}
         <div className="absolute top-0 bottom-0 left-[calc(100%/3)] w-[2px] bg-game-border-strong z-20 pointer-events-none" />
