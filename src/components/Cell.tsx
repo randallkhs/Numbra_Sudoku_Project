@@ -3,6 +3,39 @@ import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../lib/utils';
 import { useGameStore } from '../store/gameStore';
 
+export function getSpiralIndex(row: number, col: number): number {
+  let rMin = 0, rMax = 8;
+  let cMin = 0, cMax = 8;
+  let index = 0;
+  while (rMin <= rMax && cMin <= cMax) {
+    // Top row
+    for (let c = cMin; c <= cMax; c++) {
+      if (row === rMin && col === c) return index;
+      index++;
+    }
+    rMin++;
+    // Right col
+    for (let r = rMin; r <= rMax; r++) {
+      if (row === r && col === cMax) return index;
+      index++;
+    }
+    cMax--;
+    // Bottom row
+    for (let c = cMax; c >= cMin; c--) {
+      if (row === rMax && col === c) return index;
+      index++;
+    }
+    rMax--;
+    // Left col
+    for (let r = rMax; r >= rMin; r--) {
+      if (row === r && col === cMin) return index;
+      index++;
+    }
+    cMin++;
+  }
+  return index;
+}
+
 interface CellProps {
   row: number;
   col: number;
@@ -119,7 +152,7 @@ export const Cell: React.FC<CellProps> = ({ row, col, delayIndex, triggerBloom }
         backgroundColor: ["var(--color-game-surface)", "var(--color-game-accent-subtle)", "var(--color-game-surface)"]
       };
       cellTransition = {
-        delay: (row + col) * 0.05,
+        delay: getSpiralIndex(row, col) * 0.015,
         duration: 1.0,
       };
     } else {
@@ -134,7 +167,7 @@ export const Cell: React.FC<CellProps> = ({ row, col, delayIndex, triggerBloom }
         ]
       };
       cellTransition = {
-        delay: (row + col) * 0.08,
+        delay: getSpiralIndex(row, col) * 0.025,
         duration: 2.0,
         ease: "easeInOut"
       };
@@ -323,7 +356,7 @@ export const Cell: React.FC<CellProps> = ({ row, col, delayIndex, triggerBloom }
                 initial={{ x: "-100%", opacity: 0 }}
                 animate={{ x: "200%", opacity: [0, 0.8, 0.4, 0] }}
                 transition={{
-                  delay: (row + col) * 0.08,
+                  delay: getSpiralIndex(row, col) * 0.025,
                   duration: 0.9,
                   ease: "easeInOut"
                 }}
@@ -353,15 +386,30 @@ export const Cell: React.FC<CellProps> = ({ row, col, delayIndex, triggerBloom }
           </div>
 
           <motion.div
-            key={`${row}-${col}-${cellState.value}`}
+            key={`${row}-${col}-${cellState.value}-${isWon}`}
             initial={!cellState.isInitial ? { scale: 0.3, opacity: 0, filter: "blur(4px)" } : false}
-            animate={{ 
+            animate={isWon ? (
+              reducedMotion ? { opacity: 1 } : {
+                scale: [1, 1.4, 0.95, 1.15, 1],
+                rotate: [0, 15, -12, 5, 0],
+                color: ["#ffffff", "var(--color-game-accent-light)", "#ffffff"],
+                textShadow: [
+                  "0 0 0px transparent",
+                  "0 0 16px var(--color-game-accent-light)",
+                  "0 0 0px transparent"
+                ]
+              }
+            ) : { 
               scale: isSameValue ? [1, 1.2, 1] : 1, 
               opacity: 1, 
               filter: "blur(0px)",
               color: cellState.isError ? 'var(--color-game-error)' : undefined
             }}
-            transition={{ 
+            transition={isWon ? {
+              delay: getSpiralIndex(row, col) * 0.03,
+              duration: 1.5,
+              ease: "easeInOut"
+            } : { 
               type: 'spring', stiffness: 450, damping: 18, mass: 0.8,
               scale: isSameValue ? { repeat: Infinity, duration: 1.5, ease: "easeInOut" } : undefined
             }}

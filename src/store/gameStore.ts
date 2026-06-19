@@ -200,6 +200,7 @@ export const useGameStore = create<GameState>((set, get) => ({
   },
 
   selectCell: (row, col) => {
+    if (get().isWon) return;
     haptic.light();
     audio.playTick(get().difficulty);
     set({ selectedCell: [row, col] });

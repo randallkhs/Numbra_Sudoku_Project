@@ -10,6 +10,28 @@ const formatTime = (seconds: number) => {
   return `${m}:${s}`;
 };
 
+const getThemeConfettiColors = (theme: string) => {
+  switch (theme) {
+    case 'cyber':
+      return ['#ff00ff', '#00ffff', '#ff66ff', '#ffffff'];
+    case 'paper':
+      return ['#ef4444', '#b91c1c', '#f87171', '#333333'];
+    case 'neon':
+      return ['#ff007f', '#7f00ff', '#ff66b2', '#ffe6ff'];
+    case 'glitch':
+      return ['#ff003c', '#00f0ff', '#fcee0a', '#00ff00'];
+    case 'disco':
+      return ['#ff00aa', '#00ffaa', '#ffaa00', '#ffff00'];
+    case 'mechanic':
+      return ['#ff4500', '#ff8c00', '#ffd700', '#ffffff'];
+    case 'cartoon':
+      return ['#e91e63', '#9c27b0', '#03a9f4', '#212121'];
+    case 'cosmic':
+    default:
+      return ['#4f46e5', '#7c3aed', '#818cf8', '#ffffff'];
+  }
+};
+
 export function SurpriseOverlay() {
   const isWon = useGameStore(state => state.isWon);
   const lastSurprise = useGameStore(state => state.lastSurprise);
@@ -21,6 +43,7 @@ export function SurpriseOverlay() {
   const mistakes = useGameStore(state => state.mistakes);
   const hintsUsed = useGameStore(state => state.hintsUsed);
   const startNewGame = useGameStore(state => state.startNewGame);
+  const theme = useGameStore(state => state.theme);
 
   const [copied, setCopied] = useState(false);
   const [reducedMotion, setReducedMotion] = useState(false);
@@ -35,27 +58,37 @@ export function SurpriseOverlay() {
 
   useEffect(() => {
     if (isWon && !reducedMotion) {
-      const duration = 2.5 * 1000;
-      const animationEnd = Date.now() + duration;
-      const defaults = { startVelocity: 30, spread: 360, ticks: 60, zIndex: 100 };
+      const colors = getThemeConfettiColors(theme);
+      
+      // Dual mini-burst for a premium, shorter, more tasteful celebration
+      confetti({
+        particleCount: 70,
+        spread: 60,
+        origin: { y: 0.6 },
+        colors,
+      });
 
-      const interval = setInterval(function() {
-        const timeLeft = animationEnd - Date.now();
+      const timer = setTimeout(() => {
+        if (!isWon) return;
+        confetti({
+          particleCount: 30,
+          angle: 60,
+          spread: 45,
+          origin: { x: 0.1, y: 0.65 },
+          colors,
+        });
+        confetti({
+          particleCount: 30,
+          angle: 120,
+          spread: 45,
+          origin: { x: 0.9, y: 0.65 },
+          colors,
+        });
+      }, 200);
 
-        if (timeLeft <= 0) {
-          clearInterval(interval);
-          return;
-        }
-
-        const particleCount = 40 * (timeLeft / duration);
-        confetti(Object.assign({}, defaults, { 
-          particleCount, 
-          origin: { x: Math.random(), y: Math.random() - 0.2 }, 
-          colors: ['#4f46e5', '#7c3aed', '#818cf8', '#ffffff'] 
-        }));
-      }, 250);
+      return () => clearTimeout(timer);
     }
-  }, [isWon, reducedMotion]);
+  }, [isWon, reducedMotion, theme]);
 
   useEffect(() => {
     if (lastSurprise) {
@@ -67,14 +100,13 @@ export function SurpriseOverlay() {
   }, [lastSurprise, clearSurprise]);
 
   const handleShare = async () => {
-    const shareText = `⚡ Numbra Sudoku Completed! ⚡
-🏆 Difficulty: ${difficulty.charAt(0).toUpperCase() + difficulty.slice(1)}
-⏱️ Time: ${formatTime(timeElapsed)}
-❌ Mistakes: ${mistakes}/3
-💡 Hints Used: ${hintsUsed}
-🔥 Max Flow Combo: ${maxComboThisGame} Hits
-
-Play Numbra Sudoku and feel the flow!`;
+    const formattedDiff = difficulty.charAt(0).toUpperCase() + difficulty.slice(1);
+    const flowText = maxComboThisGame >= 2 ? `\nMax Flow: ${maxComboThisGame}` : '\nMax Flow: 0';
+    const shareText = `Numbra Sudoku
+Difficulty: ${formattedDiff}
+Time: ${formatTime(timeElapsed)}
+Mistakes: ${mistakes}/3
+Hints: ${hintsUsed ?? 0}${flowText}`;
 
     if (navigator.share) {
       try {
@@ -85,7 +117,6 @@ Play Numbra Sudoku and feel the flow!`;
         });
       } catch (err) {
         console.log('Error sharing:', err);
-        // fallback
         fallbackCopy(shareText);
       }
     } else {
@@ -134,7 +165,7 @@ Play Numbra Sudoku and feel the flow!`;
                 REVEAL COMPLETED
               </span>
               <h2 className="text-3xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-game-accent-start to-game-accent-end tracking-tight">
-                Numbra Solved
+                Victory Revealed
               </h2>
             </div>
 
@@ -176,7 +207,7 @@ Play Numbra Sudoku and feel the flow!`;
                   <span>HINTS USED</span>
                 </div>
                 <span className="text-sm font-bold text-game-text-primary">
-                  {hintsUsed}
+                  {hintsUsed !== undefined ? hintsUsed : 0}
                 </span>
               </div>
 
@@ -193,17 +224,24 @@ Play Numbra Sudoku and feel the flow!`;
               )}
             </div>
 
-            {/* Elegant control buttons */}
+            {/* Premium, polished control buttons exactly matching user spec */}
             <div className="flex flex-col gap-2">
               <button
-                onClick={() => startNewGame(difficulty)}
+                onClick={() => startNewGame(difficulty === 'easy' ? 'medium' : difficulty === 'medium' ? 'hard' : 'easy')}
                 className="w-full bg-gradient-to-r from-game-accent-start to-game-accent-end hover:opacity-95 text-white py-3 rounded-[16px] font-semibold flex items-center justify-center gap-2 text-sm shadow-[0_8px_20px_var(--color-game-accent-subtle)] active:scale-98 transition-all cursor-pointer"
               >
                 <Play className="w-4 h-4" />
-                <span>Same Difficulty</span>
+                <span>Play Again</span>
               </button>
 
               <div className="grid grid-cols-2 gap-2">
+                <button
+                  onClick={() => startNewGame(difficulty)}
+                  className="bg-white/[0.06] hover:bg-white/[0.1] text-game-text-primary border border-white/10 py-3 rounded-[16px] font-medium flex items-center justify-center gap-2 text-sm transition-all active:scale-98 cursor-pointer"
+                >
+                  <span>Same Difficulty</span>
+                </button>
+
                 <button
                   onClick={handleShare}
                   className="bg-white/[0.06] hover:bg-white/[0.1] text-game-text-primary border border-white/10 py-3 rounded-[16px] font-medium flex items-center justify-center gap-2 text-sm transition-all active:scale-98 cursor-pointer relative overflow-hidden"
@@ -219,13 +257,6 @@ Play Numbra Sudoku and feel the flow!`;
                       <span>Share Result</span>
                     </>
                   )}
-                </button>
-
-                <button
-                  onClick={() => startNewGame(difficulty === 'easy' ? 'medium' : difficulty === 'medium' ? 'hard' : 'easy')}
-                  className="bg-white/[0.06] hover:bg-white/[0.1] text-game-text-primary border border-white/10 py-3 rounded-[16px] font-medium flex items-center justify-center gap-2 text-sm transition-all active:scale-98 cursor-pointer"
-                >
-                  <span>Next Level</span>
                 </button>
               </div>
             </div>

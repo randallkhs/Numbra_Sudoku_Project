@@ -77,6 +77,13 @@ export function Board() {
         <div className="absolute left-0 right-0 top-[calc(100%/3)] h-[2px] bg-game-border-strong z-20 pointer-events-none" />
         <div className="absolute left-0 right-0 top-[calc(100%*2/3)] h-[2px] bg-game-border-strong z-20 pointer-events-none" />
 
+        {/* Dynamic board-wide light sweep animation on win */}
+        {isWon && !reducedMotion && (
+          <div className="absolute inset-0 pointer-events-none overflow-hidden z-30">
+            <div className="absolute top-0 -left-[100%] w-[50%] h-full bg-gradient-to-r from-transparent via-white/20 to-transparent skew-x-12 animate-[sweep_3.5s_infinite_ease-in-out_0.5s]" />
+          </div>
+        )}
+
         {board.map((row, rIdx) => (
           row.map((cell, cIdx) => {
             const isCompletedRow = completedLines.some(l => l.type === 'row' && l.index === rIdx);

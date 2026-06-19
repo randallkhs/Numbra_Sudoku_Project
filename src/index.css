@@ -188,3 +188,8 @@
 .animate-crosshair {
   animation: crosshair-pulse 2s ease-in-out infinite;
 }
+
+@keyframes sweep {
+  0% { left: -100%; top: -100%; }
+  50%, 100% { left: 200%; top: 200%; }
+}
