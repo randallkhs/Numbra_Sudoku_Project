@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { motion } from 'motion/react';
 import { useGameStore } from '../store/gameStore';
 import { Cell } from './Cell';
@@ -7,25 +8,50 @@ export function Board() {
   const isWon = useGameStore(state => state.isWon);
   const completedLines = useGameStore(state => state.completedLines);
   const solution = useGameStore(state => state.solution);
+  const clearOldAnimationEvents = useGameStore(state => state.clearOldAnimationEvents);
+  const [reducedMotion, setReducedMotion] = useState(false);
+
+  // Detect user preference for reduced motion
+  useEffect(() => {
+    const mediaQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
+    setReducedMotion(mediaQuery.matches);
+    const listener = (e: MediaQueryListEvent) => setReducedMotion(e.matches);
+    mediaQuery.addEventListener('change', listener);
+    return () => mediaQuery.removeEventListener('change', listener);
+  }, []);
+
+  // Periodic event cleanup to prevent memory leaks
+  useEffect(() => {
+    const timer = setInterval(() => {
+      clearOldAnimationEvents(2000); // sweep away events older than 2 seconds
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [clearOldAnimationEvents]);
 
   if (!board.length) return null;
 
   const gameKey = solution.length > 0 ? solution[0].join('') : 'init';
+
+  // Board-level animation on win
+  const winAnimation = reducedMotion ? {
+    opacity: 1,
+    scale: 1,
+  } : { 
+    rotateX: [0, 8, 0], 
+    scale: [1, 1.03, 1],
+    boxShadow: [
+      "0 0 0px 0px rgba(0,0,0,0)",
+      "0 0 40px 10px var(--color-game-accent-start)",
+      "0 0 20px 5px var(--color-game-accent-subtle)"
+    ]
+  };
 
   return (
     <div className="relative w-full max-w-[400px] mx-auto p-4 perspective-1000">
       <motion.div
         key={gameKey}
         initial={{ opacity: 0, scale: 0.9, rotate: -2 }}
-        animate={isWon ? { 
-          rotateX: [0, 10, 0], 
-          scale: [1, 1.05, 1],
-          boxShadow: [
-            "0 0 0px 0px rgba(0,0,0,0)",
-            "0 0 40px 10px var(--color-game-accent-start)",
-            "0 0 20px 5px var(--color-game-accent-subtle)"
-          ]
-        } : { opacity: 1, scale: 1, rotate: 0 }}
+        animate={isWon ? winAnimation : { opacity: 1, scale: 1, rotate: 0 }}
         transition={{ duration: isWon ? 1.5 : 0.6, ease: isWon ? "easeInOut" : "easeOut" }}
         className="w-full aspect-square grid grid-cols-9 grid-rows-9 bg-game-surface border-[2px] border-game-border-strong rounded-[20px] overflow-hidden shadow-[inset_0_0_20px_rgba(0,0,0,0.5)] backdrop-blur-md relative"
       >

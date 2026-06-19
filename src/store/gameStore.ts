@@ -1,11 +1,20 @@
 import { create } from 'zustand';
-import { generateSudoku, Difficulty } from '../lib/sudoku';
+import { generateSudoku, Difficulty, getConflictingCells } from '../lib/sudoku';
 import { haptic } from '../lib/haptics';
 import { audio } from '../lib/audio';
 import { saveGameState, loadGameState, clearSavedGame } from '../lib/gameStateCache';
 
 
 export type ThemeType = 'cosmic' | 'cyber' | 'paper' | 'neon' | 'glitch' | 'disco' | 'mechanic' | 'cartoon';
+
+export type AnimationEventInput =
+  | { type: 'cell-correct'; row: number; col: number; value: number }
+  | { type: 'cell-error'; row: number; col: number; value: number; conflicts?: [number, number][] }
+  | { type: 'unit-complete'; unit: 'row' | 'col' | 'box'; index: number; cells: [number, number][] }
+  | { type: 'note-removed'; row: number; col: number; value: number }
+  | { type: 'win' };
+
+export type AnimationEvent = AnimationEventInput & { id: string; createdAt: number };
 
 export interface GameStats {
   gamesWon: number;
@@ -51,6 +60,7 @@ interface GameState {
   // Surprises & Animations
   lastSurprise: string | null;
   completedLines: { type: 'row' | 'col' | 'block', index: number, id: number }[];
+  animationEvents: AnimationEvent[];
 
   // Actions
   startNewGame: (difficulty: Difficulty) => void;
@@ -69,6 +79,9 @@ interface GameState {
   setTheme: (theme: ThemeType) => void;
   toggleStats: () => void;
   syncSettings: (user: any | null) => Promise<void>;
+  pushAnimationEvent: (event: AnimationEventInput) => void;
+  clearAnimationEvent: (id: string) => void;
+  clearOldAnimationEvents: (maxAgeMs: number) => void;
 }
 
 const loadStats = (): GameStats => {
@@ -101,6 +114,7 @@ export const useGameStore = create<GameState>((set, get) => ({
 
   lastSurprise: null,
   completedLines: [],
+  animationEvents: [],
 
   startNewGame: (difficulty) => {
     haptic.medium();
@@ -139,6 +153,7 @@ export const useGameStore = create<GameState>((set, get) => ({
       isWon: false,
       lastSurprise: null,
       completedLines: [],
+      animationEvents: [],
     });
   },
 
@@ -157,7 +172,8 @@ export const useGameStore = create<GameState>((set, get) => ({
         selectedCell: null,
         notesMode: false,
         lastSurprise: null,
-        completedLines: []
+        completedLines: [],
+        animationEvents: []
       });
     } else {
       get().startNewGame('easy');
@@ -184,8 +200,18 @@ export const useGameStore = create<GameState>((set, get) => ({
       audio.playTick(difficulty);
       const newBoard = [...board.map(r => [...r])];
       const newNotes = new Set(newBoard[row][col].notes);
-      if (newNotes.has(num)) newNotes.delete(num);
-      else newNotes.add(num);
+      const hadNote = newNotes.has(num);
+      if (hadNote) {
+        newNotes.delete(num);
+        get().pushAnimationEvent({
+          type: 'note-removed',
+          row,
+          col,
+          value: num
+        });
+      } else {
+        newNotes.add(num);
+      }
       newBoard[row][col] = { ...newBoard[row][col], notes: newNotes };
       set({ board: newBoard });
       return;
@@ -209,29 +235,67 @@ export const useGameStore = create<GameState>((set, get) => ({
       haptic.error(); // no difficulty parameter needed
       audio.playError(difficulty);
       newMistakes += 1;
+
+      const conflicts = getConflictingCells(board, row, col, num);
+
+      get().pushAnimationEvent({
+        type: 'cell-error',
+        row,
+        col,
+        value: num,
+        conflicts
+      });
       
       if (newMistakes === 3) surprise = 'bruh';
     } else {
       haptic.medium();
       audio.playTick(difficulty);
-      // Clear notes from same row, col, block immutably
+
+      get().pushAnimationEvent({
+        type: 'cell-correct',
+        row,
+        col,
+        value: num
+      });
+
+      // Clear notes from same row, col, block immutably and push note-removed events where necessary
       for (let i = 0; i < 9; i++) {
         if (newBoard[row][i].notes.has(num)) {
           newBoard[row][i] = { ...newBoard[row][i], notes: new Set(newBoard[row][i].notes) };
           newBoard[row][i].notes.delete(num);
+          get().pushAnimationEvent({
+            type: 'note-removed',
+            row,
+            col: i,
+            value: num
+          });
         }
         if (newBoard[i][col].notes.has(num)) {
           newBoard[i][col] = { ...newBoard[i][col], notes: new Set(newBoard[i][col].notes) };
           newBoard[i][col].notes.delete(num);
+          get().pushAnimationEvent({
+            type: 'note-removed',
+            row: i,
+            col,
+            value: num
+          });
         }
       }
       const startRow = Math.floor(row / 3) * 3;
       const startCol = Math.floor(col / 3) * 3;
       for (let i = 0; i < 3; i++) {
         for (let j = 0; j < 3; j++) {
-          if (newBoard[startRow + i][startCol + j].notes.has(num)) {
-            newBoard[startRow + i][startCol + j] = { ...newBoard[startRow + i][startCol + j], notes: new Set(newBoard[startRow + i][startCol + j].notes) };
-            newBoard[startRow + i][startCol + j].notes.delete(num);
+          const r = startRow + i;
+          const c = startCol + j;
+          if (newBoard[r][c].notes.has(num)) {
+            newBoard[r][c] = { ...newBoard[r][c], notes: new Set(newBoard[r][c].notes) };
+            newBoard[r][c].notes.delete(num);
+            get().pushAnimationEvent({
+              type: 'note-removed',
+              row: r,
+              col: c,
+              value: num
+            });
           }
         }
       }
@@ -254,10 +318,45 @@ export const useGameStore = create<GameState>((set, get) => ({
       }
 
       let lineCleared = false;
-      if(rowComplete) { newCompletedLines.push({ type: 'row', index: row, id: Date.now() + 1 }); lineCleared = true; }
-      if(colComplete) { newCompletedLines.push({ type: 'col', index: col, id: Date.now() + 2 }); lineCleared = true; }
+      if (rowComplete) {
+        const cells: [number, number][] = Array.from({ length: 9 }, (_, x) => [row, x]);
+        get().pushAnimationEvent({
+          type: 'unit-complete',
+          unit: 'row',
+          index: row,
+          cells
+        });
+        newCompletedLines.push({ type: 'row', index: row, id: Date.now() + 1 });
+        lineCleared = true;
+      }
+      if (colComplete) {
+        const cells: [number, number][] = Array.from({ length: 9 }, (_, x) => [x, col]);
+        get().pushAnimationEvent({
+          type: 'unit-complete',
+          unit: 'col',
+          index: col,
+          cells
+        });
+        newCompletedLines.push({ type: 'col', index: col, id: Date.now() + 2 });
+        lineCleared = true;
+      }
       const blockIndex = Math.floor(row/3)*3 + Math.floor(col/3);
-      if(blockComplete) { newCompletedLines.push({ type: 'block', index: blockIndex, id: Date.now() + 3 }); lineCleared = true; }
+      if (blockComplete) {
+        const cells: [number, number][] = [];
+        for (let i = 0; i < 3; i++) {
+          for (let j = 0; j < 3; j++) {
+            cells.push([startRow + i, startCol + j]);
+          }
+        }
+        get().pushAnimationEvent({
+          type: 'unit-complete',
+          unit: 'box',
+          index: blockIndex,
+          cells
+        });
+        newCompletedLines.push({ type: 'block', index: blockIndex, id: Date.now() + 3 });
+        lineCleared = true;
+      }
 
       if (lineCleared) {
          audio.playLineComplete();
@@ -288,6 +387,10 @@ export const useGameStore = create<GameState>((set, get) => ({
       haptic.success();
       audio.playTada();
       clearSavedGame(); // game over, remove saved state
+
+      get().pushAnimationEvent({
+        type: 'win'
+      });
 
       const { stats, timeElapsed, mistakes } = get();
       
@@ -543,6 +646,36 @@ export const useGameStore = create<GameState>((set, get) => ({
         console.error("Failed to load local settings:", e);
       }
     }
+  },
+
+  pushAnimationEvent: (event: AnimationEventInput) => {
+    const id = Date.now().toString() + '-' + Math.random().toString(36).substring(2, 9);
+    const createdAt = Date.now();
+    const newEvent = { ...event, id, createdAt } as AnimationEvent;
+    set((state) => ({
+      animationEvents: [...state.animationEvents, newEvent]
+    }));
+  },
+
+  clearAnimationEvent: (id) => {
+    set((state) => {
+      const remaining = state.animationEvents.filter(e => e.id !== id);
+      if (remaining.length === state.animationEvents.length) {
+        return {};
+      }
+      return { animationEvents: remaining };
+    });
+  },
+
+  clearOldAnimationEvents: (maxAgeMs) => {
+    const cutoff = Date.now() - maxAgeMs;
+    set((state) => {
+      const remaining = state.animationEvents.filter(e => e.createdAt >= cutoff);
+      if (remaining.length === state.animationEvents.length) {
+        return {};
+      }
+      return { animationEvents: remaining };
+    });
   }
 }));
 
