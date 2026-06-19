@@ -87,14 +87,14 @@ export function Header() {
 
       <AnimatePresence>
         {showSettings && (
-          <SettingsMenu onClose={() => setShowSettings(false)} />
+          <SettingsMenu key="settings" onClose={() => setShowSettings(false)} />
         )}
       </AnimatePresence>
     </>
   );
 }
 
-function SettingsMenu({ onClose }: { onClose: () => void }) {
+function SettingsMenu({ onClose, key }: { onClose: () => void, key?: string | number }) {
     const { soundEnabled, toggleSound, hapticsEnabled, toggleHaptics, hapticIntensity, setHapticIntensity, theme, setTheme } = useGameStore();
 
   const [user, setUser] = useState(auth.currentUser);
@@ -116,6 +116,7 @@ function SettingsMenu({ onClose }: { onClose: () => void }) {
 
   return (
     <motion.div 
+      key={key}
       initial={{ opacity: 0, y: -20 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, scale: 0.95 }}
@@ -186,6 +187,7 @@ function SettingsMenu({ onClose }: { onClose: () => void }) {
           <AnimatePresence>
             {hapticsEnabled && (
               <motion.div 
+                key="haptic-intensity-menu"
                 initial={{ opacity: 0, height: 0 }}
                 animate={{ opacity: 1, height: 'auto' }}
                 exit={{ opacity: 0, height: 0 }}

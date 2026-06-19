@@ -105,6 +105,7 @@ export default function App() {
       <AnimatePresence>
         {isPaused && (
           <motion.div 
+            key="pause-overlay"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}

@@ -595,7 +595,8 @@ export const useGameStore = create<GameState>((set, get) => ({
     if (user) {
       // Import dynamically to avoid circular dependencies if any
       const { doc, getDoc } = await import('firebase/firestore');
-      const { db } = await import('../lib/firebase');
+      const { db, OperationType, handleFirestoreError } = await import('../lib/firebase');
+      const path = `users/${user.uid}/settings/current`;
       try {
         const docRef = doc(db, 'users', user.uid, 'settings', 'current');
         const docSnap = await getDoc(docRef);
@@ -616,6 +617,7 @@ export const useGameStore = create<GameState>((set, get) => ({
         }
       } catch (e) {
         console.error("Failed to load settings:", e);
+        handleFirestoreError(e, OperationType.GET, path);
       }
     } 
     
@@ -710,17 +712,21 @@ useGameStore.subscribe((state, prevState) => {
     }
 
     // dynamically import
-    import('../lib/firebase').then(({ auth, db }) => {
+    import('../lib/firebase').then(({ auth, db, OperationType, handleFirestoreError }) => {
       const user = auth.currentUser;
       if (user) {
         import('firebase/firestore').then(({ doc, setDoc }) => {
+          const path = `users/${user.uid}/settings/current`;
           setDoc(doc(db, 'users', user.uid, 'settings', 'current'), {
             theme: state.theme,
             soundEnabled: state.soundEnabled,
             hapticsEnabled: state.hapticsEnabled,
             hapticIntensity: state.hapticIntensity,
             stats: state.stats
-          }, { merge: true }).catch(console.error);
+          }, { merge: true }).catch((e) => {
+            console.error(e);
+            handleFirestoreError(e, OperationType.WRITE, path);
+          });
         });
       }
     });

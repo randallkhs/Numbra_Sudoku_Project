@@ -41,6 +41,7 @@ export function SurpriseOverlay() {
     <AnimatePresence>
       {isWon && (
         <motion.div
+          key="win-overlay"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
@@ -68,27 +69,28 @@ export function SurpriseOverlay() {
       )}
 
       {lastSurprise === 'bruh' && (
-        <SurpriseMessage emoji="🤦‍♂️" text="Bruh... 3 mistakes! Let's focus." />
+        <SurpriseMessage key="surprise-bruh" emoji="🤦‍♂️" text="Bruh... 3 mistakes! Let's focus." />
       )}
       
       {lastSurprise === 'wrong_number' && (
-        <SurpriseMessage emoji="🚨" text="Oops, incorrect logic!" />
+        <SurpriseMessage key="surprise-wrong" emoji="🚨" text="Oops, incorrect logic!" />
       )}
 
       {lastSurprise === 'lucky_7' && (
-        <SurpriseMessage emoji="🎰" text="Lucky 7 right in the center!" />
+        <SurpriseMessage key="surprise-lucky" emoji="🎰" text="Lucky 7 right in the center!" />
       )}
 
       {lastSurprise === 'line_clear' && (
-        <SurpriseMessage emoji="✨" text="Section unlocked!" />
+        <SurpriseMessage key="surprise-clear" emoji="✨" text="Section unlocked!" />
       )}
     </AnimatePresence>
   );
 }
 
-function SurpriseMessage({ emoji, text, durationMs = 3000, title = "THE SYSTEM SAYS:" }: { emoji: string, text: string, durationMs?: number, title?: string }) {
+function SurpriseMessage({ emoji, text, durationMs = 3000, title = "THE SYSTEM SAYS:", key }: { emoji: string, text: string, durationMs?: number, title?: string, key?: string | number }) {
   return (
     <motion.div
+      key={key}
       initial={{ opacity: 0, y: -50, scale: 0.8 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
       exit={{ opacity: 0, y: -20, scale: 0.8 }}

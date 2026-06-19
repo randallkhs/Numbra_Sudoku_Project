@@ -290,8 +290,7 @@ export const Cell: React.FC<CellProps> = ({ row, col, delayIndex, triggerBloom }
 
           {/* Light Pass container (contained inside cell boundaries) */}
           <div className="absolute inset-0 overflow-hidden pointer-events-none z-10 rounded-[4px]">
-            {cellUnitEvents.map((unitEvt) => {
-              if (reducedMotion) return null;
+            {cellUnitEvents.filter(() => !reducedMotion).map((unitEvt) => {
               const cellIndexInUnit = unitEvt.cells.findIndex(([r, c]) => r === row && c === col);
               const unitEventIndex = globalRecentUnits.findIndex(e => e.id === unitEvt.id);
               const seqDelay = unitEventIndex !== -1 ? unitEventIndex * 0.35 : 0;
@@ -340,6 +339,7 @@ export const Cell: React.FC<CellProps> = ({ row, col, delayIndex, triggerBloom }
                <AnimatePresence>
                  {cellState.notes.has(n) && (
                    <motion.span
+                     key={`note-span-${n}`}
                      initial={{ opacity: 0, scale: 0.4 }}
                      animate={{ opacity: 1, scale: 1 }}
                      exit={reducedMotion ? { opacity: 0 } : { scale: 0, opacity: 0, rotate: -45 }}

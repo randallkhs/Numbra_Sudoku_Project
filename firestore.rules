@@ -34,8 +34,8 @@ service cloud.firestore {
              data.board is list && data.board.size() <= 81 &&
              data.solution is list && data.solution.size() <= 81 &&
              data.difficulty is string && data.difficulty.size() <= 20 &&
-             data.mistakes is number &&
-             data.timeElapsed is number;
+             data.mistakes is int &&
+             data.timeElapsed is int;
     }
 
     match /users/{userId}/gameState/{docId} {
