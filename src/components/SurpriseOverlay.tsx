@@ -105,7 +105,7 @@ export function SurpriseOverlay() {
     const shareText = `Numbra Sudoku
 Difficulty: ${formattedDiff}
 Time: ${formatTime(timeElapsed)}
-Mistakes: ${mistakes}/3
+Mistakes: ${mistakes}
 Hints: ${hintsUsed ?? 0}${flowText}`;
 
     if (navigator.share) {
@@ -197,7 +197,7 @@ Hints: ${hintsUsed ?? 0}${flowText}`;
                   <span>MISTAKES</span>
                 </div>
                 <span className="text-sm font-bold text-game-text-primary">
-                  {mistakes}/3
+                  {mistakes}
                 </span>
               </div>
 

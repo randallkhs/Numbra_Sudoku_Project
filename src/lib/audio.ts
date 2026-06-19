@@ -281,6 +281,62 @@ class SubtleAudio {
     osc.start();
     osc.stop(this.ctx.currentTime + 0.3);
   }
+
+  playShieldArmed() {
+    if (!this.enabled) return;
+    this.init();
+    if (!this.ctx) return;
+    if (this.ctx.state === 'suspended') this.ctx.resume();
+    
+    // A pleasant futuristic power-up sound
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(300, this.ctx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(900, this.ctx.currentTime + 0.2);
+    
+    gain.gain.setValueAtTime(0, this.ctx.currentTime);
+    gain.gain.linearRampToValueAtTime(0.06, this.ctx.currentTime + 0.08);
+    gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.25);
+    
+    osc.connect(gain);
+    gain.connect(this.ctx.destination);
+    
+    osc.start();
+    osc.stop(this.ctx.currentTime + 0.25);
+  }
+
+  playShieldAbsorbed() {
+    if (!this.enabled) return;
+    this.init();
+    if (!this.ctx) return;
+    if (this.ctx.state === 'suspended') this.ctx.resume();
+    
+    // An elegant sci-fi bubble protective sound
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    const filter = this.ctx.createBiquadFilter();
+    
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(500, this.ctx.currentTime);
+    osc.frequency.linearRampToValueAtTime(1000, this.ctx.currentTime + 0.15);
+    osc.frequency.linearRampToValueAtTime(300, this.ctx.currentTime + 0.3);
+    
+    filter.type = 'lowpass';
+    filter.frequency.value = 1500;
+    
+    gain.gain.setValueAtTime(0, this.ctx.currentTime);
+    gain.gain.linearRampToValueAtTime(0.08, this.ctx.currentTime + 0.05);
+    gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.3);
+    
+    osc.connect(filter);
+    filter.connect(gain);
+    gain.connect(this.ctx.destination);
+    
+    osc.start();
+    osc.stop(this.ctx.currentTime + 0.3);
+  }
 }
 
 export const audio = new SubtleAudio();

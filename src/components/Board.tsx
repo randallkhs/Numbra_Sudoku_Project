@@ -66,6 +66,8 @@ export function Board() {
     <div className="relative w-full max-w-[420px] mx-auto px-2 sm:px-4 py-2 sm:py-4 perspective-1000">
       <motion.div
         key={gameKey}
+        role="grid"
+        aria-label="Sudoku Board"
         initial={{ opacity: 0, scale: 0.9, rotate: -2 }}
         animate={isWon ? winAnimation : { opacity: 1, scale: 1, rotate: 0 }}
         transition={{ duration: isWon ? 1.5 : 0.6, ease: isWon ? "easeInOut" : "easeOut" }}
@@ -84,22 +86,24 @@ export function Board() {
           </div>
         )}
 
-        {board.map((row, rIdx) => (
-          row.map((cell, cIdx) => {
-            const isCompletedRow = completedLines.some(l => l.type === 'row' && l.index === rIdx);
-            const isCompletedCol = completedLines.some(l => l.type === 'col' && l.index === cIdx);
-            const isCompletedBlock = completedLines.some(l => l.type === 'block' && l.index === (Math.floor(rIdx/3)*3 + Math.floor(cIdx/3)));
+        {board.map((rowArr, rIdx) => (
+          <div key={rIdx} role="row" className="contents">
+            {rowArr.map((cell, cIdx) => {
+              const isCompletedRow = completedLines.some(l => l.type === 'row' && l.index === rIdx);
+              const isCompletedCol = completedLines.some(l => l.type === 'col' && l.index === cIdx);
+              const isCompletedBlock = completedLines.some(l => l.type === 'block' && l.index === (Math.floor(rIdx/3)*3 + Math.floor(cIdx/3)));
 
-            return (
-              <Cell 
-                key={`${rIdx}-${cIdx}`} 
-                row={rIdx} 
-                col={cIdx} 
-                delayIndex={rIdx * 9 + cIdx} 
-                triggerBloom={isCompletedRow || isCompletedCol || isCompletedBlock}
-              />
-            )
-          })
+              return (
+                <Cell 
+                  key={`${rIdx}-${cIdx}`} 
+                  row={rIdx} 
+                  col={cIdx} 
+                  delayIndex={rIdx * 9 + cIdx} 
+                  triggerBloom={isCompletedRow || isCompletedCol || isCompletedBlock}
+                />
+              )
+            })}
+          </div>
         ))}
       </motion.div>
     </div>

@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../lib/utils';
 import { useGameStore } from '../store/gameStore';
+import { getLegalCandidates } from '../lib/sudoku';
 
 export function getSpiralIndex(row: number, col: number): number {
   let rMin = 0, rMax = 8;
@@ -56,6 +57,14 @@ export const Cell: React.FC<CellProps> = ({ row, col, delayIndex, triggerBloom }
   });
 
   const selectCell = useGameStore(state => state.selectCell);
+  const inputNumber = useGameStore(state => state.inputNumber);
+  const eraseCell = useGameStore(state => state.eraseCell);
+  const activeHint = useGameStore(state => state.activeHint);
+  const isPlaying = useGameStore(state => state.isPlaying);
+  const isPaused = useGameStore(state => state.isPaused);
+  const isScanning = useGameStore(state => state.isScanning);
+  const focusLensEnabled = useGameStore(state => state.focusLensEnabled);
+  const board = useGameStore(state => state.board);
   const [bloom, setBloom] = useState(false);
   const [reducedMotion, setReducedMotion] = useState(false);
 
@@ -135,6 +144,21 @@ export const Cell: React.FC<CellProps> = ({ row, col, delayIndex, triggerBloom }
     
     isSameValue = !isSelected && sValue !== 0 && cellState.value === sValue;
   }
+
+  const showFocusLens = 
+    focusLensEnabled &&
+    isSelected && 
+    isPlaying && 
+    !isWon && 
+    !isPaused && 
+    !isScanning && 
+    !cellState.isInitial && 
+    cellState.value === 0;
+
+  const legalCandidates = React.useMemo(() => {
+    if (!showFocusLens) return [];
+    return getLegalCandidates(board, row, col);
+  }, [showFocusLens, board, row, col]);
 
   const borderClasses = cn(
     col !== 8 && 'border-r border-game-border border-r-[1px]',
@@ -274,6 +298,35 @@ export const Cell: React.FC<CellProps> = ({ row, col, delayIndex, triggerBloom }
     }
   }
 
+  const isHintTarget = activeHint && activeHint.level >= 2 && activeHint.targetCell[0] === row && activeHint.targetCell[1] === col;
+  const isHintRelated = activeHint && activeHint.level >= 3 && activeHint.relatedCells.some(([r, c]) => r === row && c === col);
+
+  const notesString = cellState.notes.size > 0 
+    ? `, Notes: ${Array.from(cellState.notes).sort().join(', ')}` 
+    : '';
+
+  const cellLabelBase = cellState.isInitial
+    ? `ReadOnly Cell, Row ${row + 1}, Column ${col + 1}, Value ${cellState.value}`
+    : cellState.value !== 0
+    ? `Cell, Row ${row + 1}, Column ${col + 1}, Value ${cellState.value}`
+    : `Empty Cell, Row ${row + 1}, Column ${col + 1}${notesString}`;
+
+  const cellLabel = React.useMemo(() => {
+    if (!showFocusLens) return cellLabelBase;
+    if (legalCandidates.length > 0) {
+      let candidatesList = '';
+      if (legalCandidates.length === 1) {
+        candidatesList = legalCandidates[0].toString();
+      } else if (legalCandidates.length === 2) {
+        candidatesList = `${legalCandidates[0]} and ${legalCandidates[1]}`;
+      } else {
+        candidatesList = `${legalCandidates.slice(0, -1).join(', ')}, and ${legalCandidates[legalCandidates.length - 1]}`;
+      }
+      return `${cellLabelBase}, legal candidates ${candidatesList}`;
+    }
+    return `${cellLabelBase}, no legal candidates`;
+  }, [showFocusLens, cellLabelBase, legalCandidates]);
+
   return (
     <motion.div
       initial={{ opacity: 0, scale: 0.8 }}
@@ -281,12 +334,28 @@ export const Cell: React.FC<CellProps> = ({ row, col, delayIndex, triggerBloom }
       transition={cellTransition}
       whileTap={{ scale: 0.9 }}
       onClick={() => selectCell(row, col)}
+      role="gridcell"
+      aria-selected={isSelected}
+      aria-label={cellLabel}
+      tabIndex={0}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          selectCell(row, col);
+        } else if (e.key >= '1' && e.key <= '9' && isSelected) {
+          inputNumber(parseInt(e.key, 10));
+        } else if ((e.key === 'Backspace' || e.key === 'Delete' || e.key === 'e' || e.key === '0') && isSelected) {
+          eraseCell();
+        }
+      }}
       className={cn(
-        'w-full h-full flex items-center justify-center text-lg sm:text-2xl font-medium cursor-pointer transition-all duration-300 select-none relative focus:outline-none',
+        'w-full h-full flex items-center justify-center text-lg sm:text-2xl font-medium cursor-pointer transition-all duration-300 select-none relative focus:outline-none focus-visible:ring-2 focus-visible:ring-game-accent-light focus-visible:outline-none focus-visible:z-30',
         borderClasses,
         bloom && 'animate-bloom',
         cellState.isError ? 'bg-game-error-bg text-game-error ring-2 ring-game-error/40 z-10' : 
         isScanned ? 'bg-white shadow-[0_0_20px_white] z-50 transition-none scale-105 duration-75' :
+        isHintTarget ? 'bg-amber-500/25 ring-4 ring-amber-400 text-amber-300 z-30 shadow-[0_0_20px_var(--color-amber-400)] scale-102' :
+        isHintRelated ? 'bg-blue-500/15 ring-2 ring-blue-400/80 text-blue-300 z-20' :
         isSelected ? 'bg-gradient-to-br from-game-accent-start/35 to-game-accent-end/35 text-white z-25 ring-2 ring-game-accent-light shadow-[inset_0_0_12px_rgba(255,255,255,0.15),0_0_15px_var(--color-game-accent-subtle)]' :
         isSameValue ? 'bg-game-accent-subtle/50 text-game-accent-light font-bold z-10 shadow-[inset_0_0_6px_var(--color-game-accent-subtle)] border border-game-accent-light/20 scale-[0.98]' :
         isRelated ? 'bg-game-surface/60 animate-crosshair z-0 border border-white/5 opacity-85' : 'bg-game-surface/[0.02] hover:bg-white/[0.04] z-0',
@@ -422,23 +491,34 @@ export const Cell: React.FC<CellProps> = ({ row, col, delayIndex, triggerBloom }
         </>
       ) : (
         <div className="grid grid-cols-3 grid-rows-3 w-full h-full p-0.5 pointer-events-none">
-          {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => (
-            <div key={n} className="flex items-center justify-center text-[8px] sm:text-[10px] text-game-text-secondary font-mono leading-none">
-               <AnimatePresence>
-                 {cellState.notes.has(n) && (
-                   <motion.span
-                     key={`note-span-${n}`}
-                     initial={{ opacity: 0, scale: 0.4 }}
-                     animate={{ opacity: 1, scale: 1 }}
-                     exit={reducedMotion ? { opacity: 0 } : { scale: 0, opacity: 0, rotate: -45 }}
-                     transition={{ duration: 0.2 }}
-                   >
-                     {n}
-                   </motion.span>
-                 )}
-               </AnimatePresence>
-            </div>
-          ))}
+          {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => {
+            const hasPlayerNote = cellState.notes.has(n);
+            const isLegal = showFocusLens && legalCandidates.includes(n);
+            const shouldRender = hasPlayerNote || isLegal;
+
+            return (
+              <div key={n} className="flex items-center justify-center text-[8px] sm:text-[10px] font-mono leading-none">
+                <AnimatePresence>
+                  {shouldRender && (
+                    <motion.span
+                      key={`note-span-${n}`}
+                      initial={{ opacity: 0, scale: 0.4 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      exit={reducedMotion ? { opacity: 0 } : { scale: 0, opacity: 0, rotate: -45 }}
+                      transition={{ duration: 0.15 }}
+                      className={cn(
+                        hasPlayerNote
+                          ? "text-game-text-secondary font-bold"
+                          : "text-game-accent-light/40 font-light"
+                      )}
+                    >
+                      {n}
+                    </motion.span>
+                  )}
+                </AnimatePresence>
+              </div>
+            );
+          })}
         </div>
       )}
     </motion.div>

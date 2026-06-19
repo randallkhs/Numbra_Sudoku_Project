@@ -14,11 +14,14 @@ service cloud.firestore {
     function isOwner(userId) { return isSignedIn() && request.auth.uid == userId; }
 
     function isValidUserSettings(data) {
-      return data.keys().hasOnly(['theme', 'soundEnabled', 'hapticsEnabled', 'hapticIntensity', 'stats']) &&
-             data.theme is string && data.theme.size() <= 60 &&
-             data.soundEnabled is bool &&
-             data.hapticsEnabled is bool &&
-             (!data.keys().hasAny(['hapticIntensity']) || data.hapticIntensity in ['low', 'medium', 'high']);
+      return data.get('theme', '') is string && data.get('theme', '').size() <= 60 &&
+             data.get('soundEnabled', true) is bool &&
+             data.get('hapticsEnabled', true) is bool &&
+             data.get('focusLensEnabled', true) is bool &&
+             data.get('stats', {}) is map &&
+             (data.get('hapticIntensity', 'medium') in ['low', 'medium', 'high']) &&
+             data.keys().hasAll(['theme', 'soundEnabled', 'hapticsEnabled', 'focusLensEnabled', 'stats']) &&
+             data.keys().hasOnly(['theme', 'soundEnabled', 'hapticsEnabled', 'hapticIntensity', 'focusLensEnabled', 'stats', 'aiEnabled']);
     }
 
     match /users/{userId}/settings/{docId} {
@@ -29,14 +32,28 @@ service cloud.firestore {
     }
 
     function isValidGameState(data) {
-      return data.keys().hasOnly(['board', 'solution', 'difficulty', 'mistakes', 'timeElapsed', 'hintsUsed']) &&
-             data.keys().hasAll(['board', 'solution', 'difficulty', 'mistakes', 'timeElapsed']) &&
-             data.board is list && data.board.size() <= 81 &&
-             data.solution is list && data.solution.size() <= 81 &&
-             data.difficulty is string && data.difficulty.size() <= 20 &&
-             data.mistakes is number &&
-             data.timeElapsed is number &&
-             (!data.keys().hasAny(['hintsUsed']) || data.hintsUsed is number);
+      return data.get('version', 2) == 2 &&
+             data.get('board', []) is list && data.get('board', []).size() <= 81 &&
+             data.get('solution', []) is list && data.get('solution', []).size() <= 81 &&
+             data.get('difficulty', '') is string && data.get('difficulty', '').size() <= 20 &&
+             data.get('gameKind', '') is string && data.get('gameKind', '').size() <= 20 &&
+             data.get('mistakes', 0) is number &&
+             data.get('timeElapsed', 0) is number &&
+             (data.get('dailyDate', null) == null || (data.get('dailyDate', '') is string && data.get('dailyDate', '').size() <= 20)) &&
+             (data.get('dailyDifficulty', null) == null || (data.get('dailyDifficulty', '') is string && data.get('dailyDifficulty', '').size() <= 20)) &&
+             (data.get('hintsUsed', 0) is number) &&
+             (data.get('currentCombo', 0) is number) &&
+             (data.get('maxComboThisGame', 0) is number) &&
+             (data.get('lastComboMilestone', null) == null || data.get('lastComboMilestone', 0) is number) &&
+             (data.get('completedUnitKeys', []) is list) &&
+             (data.get('mistakeShieldState', '') is string && data.get('mistakeShieldState', '').size() <= 20) &&
+             data.keys().hasAll(['version', 'board', 'solution', 'difficulty', 'gameKind', 'mistakes', 'timeElapsed']) &&
+             data.keys().hasOnly([
+               'version', 'board', 'solution', 'difficulty', 'gameKind',
+               'dailyDate', 'dailyDifficulty', 'mistakes', 'timeElapsed',
+               'hintsUsed', 'currentCombo', 'maxComboThisGame', 'lastComboMilestone',
+               'completedUnitKeys', 'mistakeShieldState'
+             ]);
     }
 
     match /users/{userId}/gameState/{docId} {

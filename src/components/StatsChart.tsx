@@ -304,7 +304,7 @@ export const StatsChart: React.FC = () => {
                 </span>
               </div>
               <div className="flex flex-col mt-1 text-slate-300">
-                <span>Mistakes: {hoveredPoint.mistakes}/3</span>
+                <span>Mistakes: {hoveredPoint.mistakes}</span>
                 <span>Type: {hoveredPoint.isReal ? 'Your solve' : 'Sample reference'}</span>
               </div>
             </div>

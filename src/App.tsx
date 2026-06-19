@@ -13,6 +13,7 @@ import { Header } from './components/Header';
 import { SurpriseOverlay } from './components/SurpriseOverlay';
 import { Confetti } from './components/Confetti';
 import { StatsModal } from './components/StatsModal';
+import { EducationalHint } from './components/EducationalHint';
 import { cn } from './lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -103,6 +104,7 @@ export default function App() {
 
       <SurpriseOverlay />
       <StatsModal />
+      <EducationalHint />
 
       <AnimatePresence>
         {isPaused && (

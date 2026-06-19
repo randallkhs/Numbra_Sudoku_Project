@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { useGameStore } from '../store/gameStore';
 import { Difficulty } from '../lib/sudoku';
 import { cn } from '../lib/utils';
-import { Volume2, VolumeX, Vibrate, VibrateOff, Settings, X, Palette, BarChart2, Sparkles, User, LogOut, Calendar } from 'lucide-react';
+import { Volume2, VolumeX, Vibrate, VibrateOff, Settings, X, Palette, BarChart2, Sparkles, User, LogOut, Calendar, Eye, EyeOff } from 'lucide-react';
 import { auth, loginWithGoogle, logoutUser } from '../lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { DailyChallengeModal } from './DailyChallengeModal';
@@ -87,7 +87,7 @@ export function Header() {
           <div className="flex gap-4 text-sm font-medium">
             <div className="flex flex-col items-end">
               <span className="text-[10px] text-game-text-secondary uppercase tracking-[1px]">Mistakes</span>
-              <span className={cn(mistakes >= 3 ? "text-game-error" : "text-game-text-primary")}>{mistakes}/3</span>
+              <span className="text-game-text-primary">{mistakes}</span>
             </div>
             <div className="flex flex-col items-end">
               <span className="text-[10px] text-game-text-secondary uppercase tracking-[1px]">Time</span>
@@ -139,7 +139,7 @@ export function Header() {
 }
 
 function SettingsMenu({ onClose, menuId }: { onClose: () => void, menuId?: string | number, key?: any }) {
-    const { soundEnabled, toggleSound, hapticsEnabled, toggleHaptics, hapticIntensity, setHapticIntensity, theme, setTheme } = useGameStore();
+    const { soundEnabled, toggleSound, hapticsEnabled, toggleHaptics, hapticIntensity, setHapticIntensity, theme, setTheme, focusLensEnabled, toggleFocusLens } = useGameStore();
 
   const [user, setUser] = useState(auth.currentUser);
 
@@ -254,6 +254,21 @@ function SettingsMenu({ onClose, menuId }: { onClose: () => void, menuId?: strin
               </motion.div>
             )}
           </AnimatePresence>
+        </div>
+
+        <div className="flex justify-between items-center">
+          <div className="flex flex-col select-none">
+            <span className="text-sm font-medium text-gray-200">Focus Lens</span>
+            <span className="text-[10px] text-game-text-secondary">Shows choice options for empty cell</span>
+          </div>
+          <button 
+            onClick={toggleFocusLens}
+            aria-pressed={focusLensEnabled}
+            aria-label="Toggle Focus Lens tool"
+            className={cn("w-12 h-12 rounded-full flex items-center justify-center transition-all shadow-lg", focusLensEnabled ? "bg-game-accent-start text-white" : "bg-game-surface text-gray-400")}
+          >
+            {focusLensEnabled ? <Eye size={20} /> : <EyeOff size={20} />}
+          </button>
         </div>
 
       </div>

@@ -8,7 +8,9 @@
         "theme": { "type": "string" },
         "soundEnabled": { "type": "boolean" },
         "hapticsEnabled": { "type": "boolean" },
-        "aiEnabled": { "type": "boolean" }
+        "hapticIntensity": { "type": "string" },
+        "focusLensEnabled": { "type": "boolean" },
+        "stats": { "type": "object" }
       }
     },
     "GameState": {
@@ -16,12 +18,21 @@
       "description": "User's current game state.",
       "type": "object",
       "properties": {
+        "version": { "type": "number" },
         "board": { "type": "array" },
         "solution": { "type": "array" },
         "difficulty": { "type": "string" },
+        "gameKind": { "type": "string" },
+        "dailyDate": { "type": "string" },
+        "dailyDifficulty": { "type": "string" },
         "mistakes": { "type": "number" },
         "timeElapsed": { "type": "number" },
-        "hintsUsed": { "type": "number" }
+        "hintsUsed": { "type": "number" },
+        "currentCombo": { "type": "number" },
+        "maxComboThisGame": { "type": "number" },
+        "lastComboMilestone": { "type": "number" },
+        "completedUnitKeys": { "type": "array" },
+        "mistakeShieldState": { "type": "string" }
       }
     }
   },

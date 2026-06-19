@@ -1,18 +1,35 @@
 import { create } from 'zustand';
-import { generateSudoku, Difficulty, getConflictingCells } from '../lib/sudoku';
+import { generateSudoku, Difficulty, getConflictingCells, getCandidates, isValid } from '../lib/sudoku';
 import { haptic } from '../lib/haptics';
 import { audio } from '../lib/audio';
 import { saveGameState, loadGameState, clearSavedGame } from '../lib/gameStateCache';
 
+const MISTAKE_SHIELD_UNLOCK_COMBO = 5;
 
 export type ThemeType = 'cosmic' | 'cyber' | 'paper' | 'neon' | 'glitch' | 'disco' | 'mechanic' | 'cartoon';
+export type MoveSource = 'player' | 'hint' | 'redo';
+
+export interface ActiveHint {
+  level: 1 | 2 | 3 | 4;
+  technique: 'Naked Single' | 'Hidden Single' | 'Logical Deduction';
+  targetCell: [number, number];
+  relatedCells: [number, number][];
+  unit?: 'row' | 'col' | 'box';
+  message: string;
+  value: number;
+}
+
+export type MistakeShieldState = 'locked' | 'armed' | 'spent';
 
 export type AnimationEventInput =
   | { type: 'cell-correct'; row: number; col: number; value: number }
   | { type: 'cell-error'; row: number; col: number; value: number; conflicts?: [number, number][] }
   | { type: 'unit-complete'; unit: 'row' | 'col' | 'box'; index: number; cells: [number, number][] }
   | { type: 'note-removed'; row: number; col: number; value: number }
-  | { type: 'win' };
+  | { type: 'hint-revealed'; row: number; col: number; value: number }
+  | { type: 'win' }
+  | { type: 'mistake-shield-armed' }
+  | { type: 'mistake-shield-absorbed'; row: number; col: number; comboBefore: number; comboAfter: number };
 
 export type AnimationEvent = AnimationEventInput & { id: string; createdAt: number };
 
@@ -117,7 +134,7 @@ const registerDailyCompletion = (
   const history = loadDailyHistory();
   const streak = loadDailyStreak();
 
-  const existingChallenge = history.find(h => h.date === date && !h.isPractice);
+  const existingChallenge = history.find(h => h.date === date && h.difficulty === difficulty && !h.isPractice);
 
   const entry: DailyChallengeResult = {
     date,
@@ -167,6 +184,184 @@ export interface HistorySnapshot {
   maxComboThisGame: number;
   lastComboMilestone: number | null;
   hintsUsed?: number;
+  completedUnitKeys: string[];
+  mistakeShieldState?: MistakeShieldState;
+}
+
+export function findNakedSingle(board: number[][], solution: number[][]): { row: number; col: number; val: number; technique: 'Naked Single'; message: string; relatedCells: [number, number][] } | null {
+  for (let r = 0; r < 9; r++) {
+    for (let c = 0; c < 9; c++) {
+      if (board[r][c] === 0) {
+        const candidates = getCandidates(board, r, c);
+        if (candidates.length === 1) {
+          const val = candidates[0];
+          const related: [number, number][] = [];
+          for (let i = 0; i < 9; i++) {
+            if (board[r][i] !== 0 && i !== c) related.push([r, i]);
+            if (board[i][c] !== 0 && i !== r) related.push([i, c]);
+          }
+          const startR = Math.floor(r / 3) * 3;
+          const startC = Math.floor(c / 3) * 3;
+          for (let i = 0; i < 3; i++) {
+            for (let j = 0; j < 3; j++) {
+              const pr = startR + i;
+              const pc = startC + j;
+              if (board[pr][pc] !== 0 && (pr !== r || pc !== c)) {
+                if (!related.some(([xr, xc]) => xr === pr && xc === pc)) {
+                  related.push([pr, pc]);
+                }
+              }
+            }
+          }
+          return {
+            row: r,
+            col: c,
+            val,
+            technique: 'Naked Single',
+            message: `A Naked Single is available: the highlighted cell at Row ${r+1}, Column ${c+1} has only one valid candidate (${val}) because its peers block all other numbers.`,
+            relatedCells: related,
+          };
+        }
+      }
+    }
+  }
+  return null;
+}
+
+export function findHiddenSingle(board: number[][], solution: number[][]): { row: number; col: number; val: number; technique: 'Hidden Single'; message: string; relatedCells: [number, number][]; unit: 'row' | 'col' | 'box' } | null {
+  // Check Rows
+  for (let r = 0; r < 9; r++) {
+    for (let num = 1; num <= 9; num++) {
+      if (board[r].some(val => val === num)) continue;
+      
+      const possibleCols: number[] = [];
+      for (let c = 0; c < 9; c++) {
+        if (board[r][c] === 0 && isValid(board, r, c, num)) {
+          possibleCols.push(c);
+        }
+      }
+      if (possibleCols.length === 1) {
+        const c = possibleCols[0];
+        const related: [number, number][] = [];
+        for (let i = 0; i < 9; i++) {
+          if (board[i][c] === num) related.push([i, c]);
+        }
+        return {
+          row: r,
+          col: c,
+          val: num,
+          technique: 'Hidden Single',
+          message: `In Row ${r+1}, the value ${num} can only be placed in the highlighted cell. No other cell in Row ${r+1} can accept it!`,
+          relatedCells: related,
+          unit: 'row'
+        };
+      }
+    }
+  }
+
+  // Check Columns
+  for (let c = 0; c < 9; c++) {
+    for (let num = 1; num <= 9; num++) {
+      let exists = false;
+      for (let r = 0; r < 9; r++) {
+        if (board[r][c] === num) {
+          exists = true;
+          break;
+        }
+      }
+      if (exists) continue;
+
+      const possibleRows: number[] = [];
+      for (let r = 0; r < 9; r++) {
+        if (board[r][c] === 0 && isValid(board, r, c, num)) {
+          possibleRows.push(r);
+        }
+      }
+      if (possibleRows.length === 1) {
+        const r = possibleRows[0];
+        const related: [number, number][] = [];
+        for (let i = 0; i < 9; i++) {
+          if (board[r][i] === num) related.push([r, i]);
+        }
+        return {
+          row: r,
+          col: c,
+          val: num,
+          technique: 'Hidden Single',
+          message: `In Column ${c+1}, the value ${num} can only be placed in the highlighted cell. No other cell in Column ${c+1} can accept it!`,
+          relatedCells: related,
+          unit: 'col'
+        };
+      }
+    }
+  }
+
+  // Check Boxes
+  for (let box = 0; box < 9; box++) {
+    const startR = Math.floor(box / 3) * 3;
+    const startC = (box % 3) * 3;
+
+    for (let num = 1; num <= 9; num++) {
+      let exists = false;
+      for (let i = 0; i < 3; i++) {
+        for (let j = 0; j < 3; j++) {
+          if (board[startR + i][startC + j] === num) {
+            exists = true;
+          }
+        }
+      }
+      if (exists) continue;
+
+      const cells: [number, number][] = [];
+      for (let i = 0; i < 3; i++) {
+        for (let j = 0; j < 3; j++) {
+          const r = startR + i;
+          const c = startC + j;
+          if (board[r][c] === 0 && isValid(board, r, c, num)) {
+            cells.push([r, c]);
+          }
+        }
+      }
+      if (cells.length === 1) {
+        const [r, c] = cells[0];
+        const related: [number, number][] = [];
+        for (let i = 0; i < 9; i++) {
+          if (board[r][i] === num && (Math.floor(i / 3) !== Math.floor(c / 3))) related.push([r, i]);
+          if (board[i][c] === num && (Math.floor(i / 3) !== Math.floor(r / 3))) related.push([i, c]);
+        }
+        return {
+          row: r,
+          col: c,
+          val: num,
+          technique: 'Hidden Single',
+          message: `In Box ${box+1}, the value ${num} can only be placed in the highlighted cell. No other cell in this box can accept it!`,
+          relatedCells: related,
+          unit: 'box'
+        };
+      }
+    }
+  }
+
+  return null;
+}
+
+export function findFallbackSingle(board: number[][], solution: number[][]): { row: number; col: number; val: number; technique: 'Logical Deduction'; message: string; relatedCells: [number, number][] } | null {
+  for (let r = 0; r < 9; r++) {
+    for (let c = 0; c < 9; c++) {
+      if (board[r][c] === 0) {
+        const val = solution[r][c];
+        return {
+          row: r,
+          col: c,
+          val,
+          technique: 'Logical Deduction',
+          message: `By cross-referencing row and column constraints, the number ${val} is the only valid number for the highlighted cell.`,
+          relatedCells: [],
+        };
+      }
+    }
+  }
+  return null;
 }
 
 interface GameState {
@@ -201,26 +396,30 @@ interface GameState {
   hapticsEnabled: boolean;
   hapticIntensity: 'low' | 'medium' | 'high';
   theme: ThemeType;
+  focusLensEnabled: boolean;
 
   stats: GameStats;
-
   showStats: boolean;
 
   // Combos
   currentCombo: number;
   maxComboThisGame: number;
   lastComboMilestone: number | null;
+  mistakeShieldState: MistakeShieldState;
 
   // Surprises & Animations
   lastSurprise: string | null;
   completedLines: { type: 'row' | 'col' | 'block', index: number, id: number }[];
+  completedUnitKeys: string[];
   animationEvents: AnimationEvent[];
+  activeHint: ActiveHint | null;
 
   // Actions
   startNewGame: (difficulty: Difficulty) => void;
   startDailyChallenge: (difficulty: Difficulty, dateStr: string, isPractice?: boolean) => void;
   loadSavedGameOrStartNew: () => Promise<void>;
   selectCell: (row: number, col: number) => void;
+  applyCellValue: (params: { row: number; col: number; value: number; source: MoveSource }) => void;
   inputNumber: (num: number) => void;
   toggleNotesMode: () => void;
   eraseCell: () => void;
@@ -228,10 +427,15 @@ interface GameState {
   togglePause: () => void;
   clearSurprise: () => void;
   revealHint: () => void;
+  requestHint: () => void;
+  advanceHint: () => void;
+  confirmHintReveal: () => void;
+  cancelHint: () => void;
   undo: () => void;
   redo: () => void;
   toggleSound: () => void;
   toggleHaptics: () => void;
+  toggleFocusLens: () => void;
   setHapticIntensity: (intensity: 'low' | 'medium' | 'high') => void;
   setTheme: (theme: ThemeType) => void;
   toggleStats: () => void;
@@ -241,12 +445,54 @@ interface GameState {
   clearOldAnimationEvents: (maxAgeMs: number) => void;
 }
 
+const isBrowser = typeof window !== 'undefined';
+
 const loadStats = (): GameStats => {
+  if (isBrowser) {
+    try {
+      const raw = localStorage.getItem('sudoku_stats');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed) return parsed;
+      }
+    } catch (e) {
+      console.error("Failed to load stats:", e);
+    }
+  }
   return { gamesWon: 0, averageTime: 0, currentStreak: 0, totalGamesFinished: 0, fastestFinish: null, achievements: [], history: [] };
 };
 
+const loadSettings = () => {
+  if (isBrowser) {
+    try {
+      const raw = localStorage.getItem('sudoku_settings');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed) {
+          return {
+            theme: (parsed.theme || 'cosmic') as ThemeType,
+            soundEnabled: parsed.soundEnabled !== undefined ? parsed.soundEnabled : true,
+            hapticsEnabled: parsed.hapticsEnabled !== undefined ? parsed.hapticsEnabled : true,
+            hapticIntensity: (parsed.hapticIntensity || 'medium') as 'low' | 'medium' | 'high',
+            focusLensEnabled: parsed.focusLensEnabled !== undefined ? parsed.focusLensEnabled : true
+          };
+        }
+      }
+    } catch (e) {
+      console.error("Failed to load settings:", e);
+    }
+  }
+  return {
+    theme: 'cosmic' as ThemeType,
+    soundEnabled: true,
+    hapticsEnabled: true,
+    hapticIntensity: 'medium' as const,
+    focusLensEnabled: true
+  };
+};
+
 const pushUndoState = (get: () => GameState, set: (state: any) => void) => {
-  const { board, mistakes, currentCombo, maxComboThisGame, lastComboMilestone, hintsUsed, undoStack } = get();
+  const { board, mistakes, currentCombo, maxComboThisGame, lastComboMilestone, hintsUsed, undoStack, completedUnitKeys, mistakeShieldState } = get();
   
   const boardCopy = board.map(row => 
     row.map(cell => ({
@@ -264,6 +510,8 @@ const pushUndoState = (get: () => GameState, set: (state: any) => void) => {
     maxComboThisGame,
     lastComboMilestone,
     hintsUsed,
+    completedUnitKeys: [...completedUnitKeys],
+    mistakeShieldState
   };
 
   set({
@@ -299,10 +547,11 @@ export const useGameStore = create<GameState>((set, get) => ({
   isScanning: false,
   scanningCell: null,
   
-  soundEnabled: true,
-  hapticsEnabled: true,
-  hapticIntensity: 'medium',
-  theme: 'cosmic',
+  soundEnabled: loadSettings().soundEnabled,
+  hapticsEnabled: loadSettings().hapticsEnabled,
+  hapticIntensity: loadSettings().hapticIntensity,
+  theme: loadSettings().theme,
+  focusLensEnabled: loadSettings().focusLensEnabled,
 
   stats: loadStats(),
   showStats: false,
@@ -310,10 +559,13 @@ export const useGameStore = create<GameState>((set, get) => ({
   currentCombo: 0,
   maxComboThisGame: 0,
   lastComboMilestone: null,
+  mistakeShieldState: 'locked',
 
   lastSurprise: null,
   completedLines: [],
+  completedUnitKeys: [],
   animationEvents: [],
+  activeHint: null,
 
   startNewGame: (difficulty) => {
     haptic.medium();
@@ -321,7 +573,7 @@ export const useGameStore = create<GameState>((set, get) => ({
     const { puzzle, solution } = generateSudoku(difficulty);
     
     // If resetting an ongoing game, break the streak
-    const { isPlaying, mistakes, timeElapsed, stats } = get();
+    const { isPlaying, timeElapsed, stats } = get();
     if (isPlaying && timeElapsed > 0) {
       const newStats = {
         ...stats,
@@ -355,10 +607,13 @@ export const useGameStore = create<GameState>((set, get) => ({
       redoStack: [],
       lastSurprise: null,
       completedLines: [],
+      completedUnitKeys: [],
       animationEvents: [],
       currentCombo: 0,
       maxComboThisGame: 0,
       lastComboMilestone: null,
+      activeHint: null,
+      mistakeShieldState: 'locked',
       // Reset Daily Challenge states
       isDailyChallenge: false,
       dailyChallengeDate: null,
@@ -398,10 +653,13 @@ export const useGameStore = create<GameState>((set, get) => ({
       redoStack: [],
       lastSurprise: null,
       completedLines: [],
+      completedUnitKeys: [],
       animationEvents: [],
       currentCombo: 0,
       maxComboThisGame: 0,
       lastComboMilestone: null,
+      activeHint: null,
+      mistakeShieldState: 'locked',
       // Set Daily Challenge states
       isDailyChallenge: true,
       dailyChallengeDate: dateStr,
@@ -422,21 +680,24 @@ export const useGameStore = create<GameState>((set, get) => ({
         isPlaying: true,
         isPaused: false,
         isWon: false,
-        hintsUsed: (saved as any).hintsUsed || 0,
+        hintsUsed: saved.hintsUsed || 0,
         undoStack: [],
         redoStack: [],
         selectedCell: null,
         notesMode: false,
         lastSurprise: null,
         completedLines: [],
+        completedUnitKeys: saved.completedUnitKeys || [],
         animationEvents: [],
-        currentCombo: 0,
-        maxComboThisGame: 0,
-        lastComboMilestone: null,
-        isDailyChallenge: false,
-        dailyChallengeDate: null,
-        dailyChallengeDifficulty: null,
+        currentCombo: saved.currentCombo || 0,
+        maxComboThisGame: saved.maxComboThisGame || 0,
+        lastComboMilestone: saved.lastComboMilestone,
+        isDailyChallenge: saved.gameKind === 'daily',
+        dailyChallengeDate: saved.dailyDate,
+        dailyChallengeDifficulty: saved.dailyDifficulty,
         isDailyPractice: false,
+        activeHint: null,
+        mistakeShieldState: saved.mistakeShieldState || 'locked',
       });
     } else {
       get().startNewGame('easy');
@@ -450,47 +711,25 @@ export const useGameStore = create<GameState>((set, get) => ({
     set({ selectedCell: [row, col] });
   },
 
-  inputNumber: (num) => {
-    const { board, solution, selectedCell, notesMode, isPlaying, isPaused, isScanning, mistakes, completedLines, difficulty } = get();
-    if (!isPlaying || isPaused || isScanning || !selectedCell) return;
-    
-    const [row, col] = selectedCell;
+  applyCellValue: ({ row, col, value, source }) => {
+    const { board, solution, isPlaying, isPaused, isScanning, mistakes, completedLines, difficulty, completedUnitKeys } = get();
+    if (!isPlaying || isPaused || (isScanning && source !== 'hint')) return;
+
     const cell = board[row][col];
-    
-    if (cell.isInitial || cell.value === num) return;
+    if (cell.isInitial || cell.value === value) return;
 
-    pushUndoState(get, set);
-
-    if (notesMode) {
-      haptic.light();
-      audio.playTick(difficulty);
-      const newBoard = [...board.map(r => [...r])];
-      const newNotes = new Set(newBoard[row][col].notes);
-      const hadNote = newNotes.has(num);
-      if (hadNote) {
-        newNotes.delete(num);
-        get().pushAnimationEvent({
-          type: 'note-removed',
-          row,
-          col,
-          value: num
-        });
-      } else {
-        newNotes.add(num);
-      }
-      newBoard[row][col] = { ...newBoard[row][col], notes: newNotes };
-      set({ board: newBoard });
-      return;
-    }
-
-    // Normal input
-    const newBoard = [...board.map(r => [...r])];
-    const isError = solution[row][col] !== num;
+    // Deep mutable-ready copies
+    const newBoard = board.map(r => r.map(c => ({
+      ...c,
+      notes: new Set(c.notes)
+    })));
+    const isError = solution[row][col] !== value;
     
     newBoard[row][col] = {
       ...newBoard[row][col],
-      value: num,
+      value,
       isError,
+      notes: new Set() // Value placed clears notes of this cell!
     };
 
     let newMistakes = mistakes;
@@ -500,26 +739,59 @@ export const useGameStore = create<GameState>((set, get) => ({
     let nextCombo = get().currentCombo;
     let nextMaxCombo = get().maxComboThisGame;
     let nextMilestone = get().lastComboMilestone;
+    let shieldState = get().mistakeShieldState;
 
     if (isError) {
-      haptic.error(); // no difficulty parameter needed
-      audio.playError(difficulty);
-      newMistakes += 1;
+      const conflicts = getConflictingCells(board, row, col, value);
 
-      const conflicts = getConflictingCells(board, row, col, num);
+      // Handle Mistake Shield
+      if (source === 'player' && shieldState === 'armed') {
+        shieldState = 'spent';
+        haptic.light();
+        audio.playShieldAbsorbed();
 
-      get().pushAnimationEvent({
-        type: 'cell-error',
-        row,
-        col,
-        value: num,
-        conflicts
-      });
-      
-      if (newMistakes === 3) surprise = 'bruh';
+        const comboBefore = nextCombo;
+        nextCombo = Math.max(3, nextCombo - 2);
 
-      // LESS PUNISHING option: half the combo (rounded down) instead of a complete reset to 0
-      nextCombo = Math.floor(nextCombo / 2);
+        get().pushAnimationEvent({
+          type: 'mistake-shield-absorbed',
+          row,
+          col,
+          comboBefore,
+          comboAfter: nextCombo
+        });
+
+        newMistakes += 1;
+
+        get().pushAnimationEvent({
+          type: 'cell-error',
+          row,
+          col,
+          value,
+          conflicts
+        });
+
+        if (newMistakes === 3) surprise = 'bruh';
+      } else {
+        haptic.error();
+        audio.playError(difficulty);
+        newMistakes += 1;
+
+        get().pushAnimationEvent({
+          type: 'cell-error',
+          row,
+          col,
+          value,
+          conflicts
+        });
+
+        if (newMistakes === 3) surprise = 'bruh';
+
+        // Half the helper combo rounded down (Only for player moves)
+        if (source === 'player') {
+          nextCombo = Math.floor(nextCombo / 2);
+        }
+      }
     } else {
       haptic.medium();
       audio.playTick(difficulty);
@@ -528,69 +800,82 @@ export const useGameStore = create<GameState>((set, get) => ({
         type: 'cell-correct',
         row,
         col,
-        value: num
+        value
       });
 
-      nextCombo += 1;
-      if (nextCombo > nextMaxCombo) {
-        nextMaxCombo = nextCombo;
+      // Award combos ONLY for Player Source placements!
+      if (source === 'player') {
+        const comboBefore = nextCombo;
+        nextCombo += 1;
+        if (nextCombo > nextMaxCombo) {
+          nextMaxCombo = nextCombo;
+        }
+
+        // Detect milestones
+        if (nextCombo === 2 || nextCombo === 3 || nextCombo === 5 || nextCombo === 8) {
+          nextMilestone = nextCombo;
+        }
+
+        // Arm mistake shield if we just reached combo >= 5 and it was locked
+        if (comboBefore < MISTAKE_SHIELD_UNLOCK_COMBO && nextCombo >= MISTAKE_SHIELD_UNLOCK_COMBO && shieldState === 'locked') {
+          shieldState = 'armed';
+          audio.playShieldArmed();
+          haptic.light();
+          get().pushAnimationEvent({
+            type: 'mistake-shield-armed'
+          });
+        }
       }
 
-      // Detect milestone entries
-      if (nextCombo === 2 || nextCombo === 3 || nextCombo === 5 || nextCombo === 8) {
-        nextMilestone = nextCombo;
-      }
-
-      // Clear notes from same row, col, block immutably and push note-removed events where necessary
+      // Clear row and col peer notes
       for (let i = 0; i < 9; i++) {
-        if (newBoard[row][i].notes.has(num)) {
-          newBoard[row][i] = { ...newBoard[row][i], notes: new Set(newBoard[row][i].notes) };
-          newBoard[row][i].notes.delete(num);
+        if (newBoard[row][i].notes.has(value)) {
+          newBoard[row][i].notes.delete(value);
           get().pushAnimationEvent({
             type: 'note-removed',
             row,
             col: i,
-            value: num
+            value
           });
         }
-        if (newBoard[i][col].notes.has(num)) {
-          newBoard[i][col] = { ...newBoard[i][col], notes: new Set(newBoard[i][col].notes) };
-          newBoard[i][col].notes.delete(num);
+        if (newBoard[i][col].notes.has(value)) {
+          newBoard[i][col].notes.delete(value);
           get().pushAnimationEvent({
             type: 'note-removed',
             row: i,
             col,
-            value: num
+            value
           });
         }
       }
+      
+      // Clear 3x3 box peer notes
       const startRow = Math.floor(row / 3) * 3;
       const startCol = Math.floor(col / 3) * 3;
       for (let i = 0; i < 3; i++) {
         for (let j = 0; j < 3; j++) {
           const r = startRow + i;
           const c = startCol + j;
-          if (newBoard[r][c].notes.has(num)) {
-            newBoard[r][c] = { ...newBoard[r][c], notes: new Set(newBoard[r][c].notes) };
-            newBoard[r][c].notes.delete(num);
+          if (newBoard[r][c].notes.has(value)) {
+            newBoard[r][c].notes.delete(value);
             get().pushAnimationEvent({
               type: 'note-removed',
               row: r,
               col: c,
-              value: num
+              value
             });
           }
         }
       }
 
-      // Check line completions
+      // Check row/column/box units completion
       let rowComplete = true;
       let colComplete = true;
       let blockComplete = true;
 
-      for(let x=0; x<9; x++) {
-        if(newBoard[row][x].value !== solution[row][x] || newBoard[row][x].isError) rowComplete = false;
-        if(newBoard[x][col].value !== solution[x][col] || newBoard[x][col].isError) colComplete = false;
+      for (let x = 0; x < 9; x++) {
+        if (newBoard[row][x].value !== solution[row][x] || newBoard[row][x].isError) rowComplete = false;
+        if (newBoard[x][col].value !== solution[x][col] || newBoard[x][col].isError) colComplete = false;
       }
       for (let i = 0; i < 3; i++) {
         for (let j = 0; j < 3; j++) {
@@ -601,7 +886,10 @@ export const useGameStore = create<GameState>((set, get) => ({
       }
 
       let lineCleared = false;
-      if (rowComplete) {
+      const nextCompletedUnitKeys = [...completedUnitKeys];
+
+      const rowKey = `row-${row}`;
+      if (rowComplete && !completedUnitKeys.includes(rowKey)) {
         const cells: [number, number][] = Array.from({ length: 9 }, (_, x) => [row, x]);
         get().pushAnimationEvent({
           type: 'unit-complete',
@@ -610,9 +898,12 @@ export const useGameStore = create<GameState>((set, get) => ({
           cells
         });
         newCompletedLines.push({ type: 'row', index: row, id: Date.now() + 1 });
+        nextCompletedUnitKeys.push(rowKey);
         lineCleared = true;
       }
-      if (colComplete) {
+
+      const colKey = `col-${col}`;
+      if (colComplete && !completedUnitKeys.includes(colKey)) {
         const cells: [number, number][] = Array.from({ length: 9 }, (_, x) => [x, col]);
         get().pushAnimationEvent({
           type: 'unit-complete',
@@ -621,10 +912,13 @@ export const useGameStore = create<GameState>((set, get) => ({
           cells
         });
         newCompletedLines.push({ type: 'col', index: col, id: Date.now() + 2 });
+        nextCompletedUnitKeys.push(colKey);
         lineCleared = true;
       }
-      const blockIndex = Math.floor(row/3)*3 + Math.floor(col/3);
-      if (blockComplete) {
+
+      const blockIndex = Math.floor(row / 3) * 3 + Math.floor(col / 3);
+      const blockKey = `box-${blockIndex}`;
+      if (blockComplete && !completedUnitKeys.includes(blockKey)) {
         const cells: [number, number][] = [];
         for (let i = 0; i < 3; i++) {
           for (let j = 0; j < 3; j++) {
@@ -638,6 +932,7 @@ export const useGameStore = create<GameState>((set, get) => ({
           cells
         });
         newCompletedLines.push({ type: 'block', index: blockIndex, id: Date.now() + 3 });
+        nextCompletedUnitKeys.push(blockKey);
         lineCleared = true;
       }
 
@@ -647,13 +942,14 @@ export const useGameStore = create<GameState>((set, get) => ({
          surprise = 'line_clear';
       }
 
-      // Check center cell 7
-      if (row === 4 && col === 4 && num === 7) {
+      if (row === 4 && col === 4 && value === 7) {
         surprise = 'lucky_7';
       }
+
+      set({ completedUnitKeys: nextCompletedUnitKeys });
     }
 
-    // Check win condition
+    // Check overall win condition
     let won = true;
     for (let r = 0; r < 9; r++) {
       for (let c = 0; c < 9; c++) {
@@ -669,13 +965,13 @@ export const useGameStore = create<GameState>((set, get) => ({
     if (won) {
       haptic.success();
       audio.playTada();
-      clearSavedGame(); // game over, remove saved state
+      clearSavedGame();
 
       get().pushAnimationEvent({
         type: 'win'
       });
 
-      const { stats, timeElapsed, isDailyChallenge, dailyChallengeDate, difficulty, hintsUsed, maxComboThisGame, isDailyPractice } = get();
+      const { stats, timeElapsed, isDailyChallenge, dailyChallengeDate, hintsUsed, isDailyPractice } = get();
       
       const achievements = new Set(stats.achievements || []);
       if (stats.gamesWon + 1 >= 10) achievements.add('Complete 10 games');
@@ -685,7 +981,7 @@ export const useGameStore = create<GameState>((set, get) => ({
       const newHistoryEntry: GameHistoryEntry = {
         difficulty,
         timeElapsed,
-        date: new Date().toISOString().split('T')[0],
+        date: getLocalDateString(),
         isDaily: isDailyChallenge,
         mistakes: newMistakes
       };
@@ -710,7 +1006,7 @@ export const useGameStore = create<GameState>((set, get) => ({
           timeElapsed,
           newMistakes,
           hintsUsed,
-          maxComboThisGame,
+          nextMaxCombo, // Requirement Part 4: Pass nextMaxCombo correctly calculated before recording
           isDailyPractice
         );
         set({
@@ -729,7 +1025,8 @@ export const useGameStore = create<GameState>((set, get) => ({
       completedLines: newCompletedLines,
       currentCombo: nextCombo,
       maxComboThisGame: nextMaxCombo,
-      lastComboMilestone: nextMilestone
+      lastComboMilestone: nextMilestone,
+      mistakeShieldState: shieldState
     });
 
     if (newCompletedLines.length > completedLines.length) {
@@ -737,10 +1034,46 @@ export const useGameStore = create<GameState>((set, get) => ({
         set(state => ({ completedLines: state.completedLines.slice(newCompletedLines.length - completedLines.length) }));
       }, 1000);
     }
+  },
+
+  inputNumber: (num) => {
+    const { board, selectedCell, notesMode, isPlaying, isPaused, isScanning, difficulty } = get();
+    if (!isPlaying || isPaused || isScanning || !selectedCell) return;
     
-    if (!won) {
-      // Auto-save is handled by state subscription
+    const [row, col] = selectedCell;
+    const cell = board[row][col];
+    
+    if (cell.isInitial || cell.value === num) return;
+
+    pushUndoState(get, set);
+
+    if (notesMode) {
+      if (cell.value !== 0) return; // Note updates apply exclusively to empty cells!
+
+      haptic.light();
+      audio.playTick(difficulty);
+      const newBoard = board.map(r => r.map(c => ({
+        ...c,
+        notes: new Set(c.notes)
+      })));
+      const newNotes = newBoard[row][col].notes;
+      const hadNote = newNotes.has(num);
+      if (hadNote) {
+        newNotes.delete(num);
+        get().pushAnimationEvent({
+          type: 'note-removed',
+          row,
+          col,
+          value: num
+        });
+      } else {
+        newNotes.add(num);
+      }
+      set({ board: newBoard });
+      return;
     }
+
+    get().applyCellValue({ row, col, value: num, source: 'player' });
   },
 
   toggleNotesMode: () => {
@@ -750,31 +1083,19 @@ export const useGameStore = create<GameState>((set, get) => ({
   },
 
   eraseCell: () => {
-    const { board, selectedCell, isPlaying, isPaused, isScanning, difficulty } = get();
-    if (!isPlaying || isPaused || isScanning || !selectedCell) return;
-    
+    const { board, selectedCell, isWon, isPaused, isScanning } = get();
+    if (isWon || isPaused || isScanning || !selectedCell) return;
     const [row, col] = selectedCell;
     const cell = board[row][col];
-    
-    if (cell.isInitial) {
-      haptic.error();
-      audio.playError(difficulty);
-      return;
-    }
-
-    if (cell.value === 0) return;
+    if (cell.isInitial || cell.value === 0) return;
 
     pushUndoState(get, set);
 
-    haptic.heavy();
-    audio.playTick(difficulty);
-    const newBoard = [...board.map(r => [...r])];
-    newBoard[row][col] = {
-      ...cell,
-      value: 0,
-      isError: false,
-    };
-    
+    const newBoard = board.map(r => r.map(c => ({ ...c, notes: new Set(c.notes) })));
+    newBoard[row][col].value = 0;
+    newBoard[row][col].isError = false;
+    newBoard[row][col].notes = new Set(); // Reset erasing cell notes completely to prevent leaving stale notes behind!
+
     set({ board: newBoard });
   },
 
@@ -795,211 +1116,113 @@ export const useGameStore = create<GameState>((set, get) => ({
   clearSurprise: () => set({ lastSurprise: null }),
 
   revealHint: () => {
-    const { board, solution, isPlaying, isPaused, isScanning, difficulty, selectedCell } = get();
-    if (!isPlaying || isPaused || isScanning) return;
+    const { isScanning, isWon, isPaused, activeHint } = get();
+    if (isWon || isPaused) return;
 
-    let target: [number, number] | null = null;
-    
-    if (selectedCell) {
-      const [r, c] = selectedCell;
-      const cell = board[r][c];
-      if (!cell.isInitial && cell.value !== solution[r][c]) {
-        target = [r, c];
-      }
+    haptic.medium();
+
+    if (activeHint) {
+      get().advanceHint();
+      return;
     }
 
-    if (!target) {
-      // Find all empty or incorrect cells
-      const candidates: [number, number][] = [];
-      for (let r = 0; r < 9; r++) {
-        for (let c = 0; c < 9; c++) {
-          const bdCell = board[r][c];
-          if (!bdCell.isInitial && bdCell.value !== solution[r][c]) {
-            candidates.push([r, c]);
-          }
-        }
+    set({ isScanning: true, scanningCell: [0, 0] });
+
+    let count = 0;
+    const interval = setInterval(() => {
+      const r = Math.floor(Math.random() * 9);
+      const c = Math.floor(Math.random() * 9);
+      set({ scanningCell: [r, c] });
+      count++;
+      if (count >= 10) {
+        clearInterval(interval);
+        set({ isScanning: false, scanningCell: null });
+        get().requestHint();
       }
-
-      if (candidates.length === 0) return;
-
-      // Pick a random candidate
-      target = candidates[Math.floor(Math.random() * candidates.length)];
-    }
-
-    const [targetR, targetC] = target;
-
-    set((state) => ({ 
-      isScanning: true,
-      hintsUsed: state.hintsUsed + 1
-    }));
-    
-    let scanCount = 0;
-    const maxScans = 15;
-    
-    haptic.heavy();
-    
-    const scanInterval = setInterval(() => {
-      audio.playTick(difficulty);
-      // Pick random cell for visual scan effect
-      const randomR = Math.floor(Math.random() * 9);
-      const randomC = Math.floor(Math.random() * 9);
-      set({ scanningCell: [randomR, randomC] });
-      
-      scanCount++;
-      if (scanCount >= maxScans) {
-        clearInterval(scanInterval);
-        
-        const wasNotesMode = get().notesMode;
-        if (wasNotesMode) set({ notesMode: false });
-        
-        set({ scanningCell: null });
-        get().selectCell(targetR, targetC);
-        
-        setTimeout(() => {
-           // Re-select the cell to avoid race conditions if the user tapped elsewhere
-           get().selectCell(targetR, targetC);
-           get().inputNumber(solution[targetR][targetC]);
-           set({ isScanning: false });
-           
-           if (wasNotesMode) set({ notesMode: true });
-        }, 150);
-      }
-    }, 80);
+    }, 100);
   },
 
-  toggleSound: () => {
-    set((state) => {
-      const next = !state.soundEnabled;
-      audio.enabled = next;
-      if (next) audio.init();
-      return { soundEnabled: next };
+  requestHint: () => {
+    const { board, solution, hintsUsed } = get();
+    const rawBoard = board.map(row => row.map(cell => cell.value));
+    
+    // prioritized search for naked followed by hidden, fallback is general crossreferencing logical deduction
+    const hintResult = findNakedSingle(rawBoard, solution) || findHiddenSingle(rawBoard, solution) || findFallbackSingle(rawBoard, solution);
+    
+    if (hintResult) {
+      const actHint: ActiveHint = {
+        level: 1,
+        technique: hintResult.technique,
+        targetCell: [hintResult.row, hintResult.col],
+        relatedCells: hintResult.relatedCells || [],
+        unit: (hintResult as any).unit,
+        message: `We detected a **${hintResult.technique}** deduction. Click next to learn more.`,
+        value: hintResult.val
+      };
+
+      set({
+        activeHint: actHint,
+        hintsUsed: hintsUsed + 1
+      });
+
+      haptic.success();
+      audio.playLineComplete();
+    }
+  },
+
+  advanceHint: () => {
+    const { activeHint } = get();
+    if (!activeHint) return;
+
+    const nextLevel = (activeHint.level < 4 ? activeHint.level + 1 : 4) as 1 | 2 | 3 | 4;
+    const [row, col] = activeHint.targetCell;
+    const value = activeHint.value;
+
+    let message = '';
+    if (nextLevel === 2) {
+      message = `Take a close look at the highlighted cell at Row ${row + 1}, Column ${col + 1}.`;
+      set({ selectedCell: [row, col] });
+    } else if (nextLevel === 3) {
+      if (activeHint.technique === 'Naked Single') {
+        message = `Surrounding peers in the row, column, and box block all candidates except **${value}**. It is the only option here!`;
+      } else if (activeHint.technique === 'Hidden Single') {
+        message = `In this ${activeHint.unit}, the number **${value}** can only go inside this cell. No other cell fits it!`;
+      } else {
+        message = `By logical cross-referencing of remaining candidates, the number **${value}** fits perfectly.`;
+      }
+    } else if (nextLevel === 4) {
+      message = `Would you like Numbra to reveal and place the correct value (**${value}**) into this cell?`;
+    }
+
+    set({
+      activeHint: {
+        ...activeHint,
+        level: nextLevel,
+        message
+      }
     });
-  },
-
-  toggleHaptics: () => {
-    set((state) => {
-      const next = !state.hapticsEnabled;
-      haptic.enabled = next;
-      if (next) haptic.light();
-      return { hapticsEnabled: next };
-    });
-  },
-
-  setHapticIntensity: (intensity: 'low' | 'medium' | 'high') => {
-    set({ hapticIntensity: intensity });
-    haptic.intensity = intensity;
-    // Maybe trigger a sample haptic feedback?
-    if (get().hapticsEnabled) {
-       import('../lib/haptics').then(({ haptic }) => {
-          haptic.medium(); // Just a test buzz
-       });
-    }
-  },
-
-  toggleStats: () => {
     haptic.light();
-    audio.playTick();
-    set((state) => ({ showStats: !state.showStats }));
   },
 
-  setTheme: (theme) => {
-    haptic.light();
-    audio.playTick();
-    audio.theme = theme;
-    set({ theme });
+  confirmHintReveal: () => {
+    const { activeHint } = get();
+    if (!activeHint) return;
+
+    const [row, col] = activeHint.targetCell;
+    const value = activeHint.value;
+
+    pushUndoState(get, set);
+    get().applyCellValue({ row, col, value, source: 'hint' });
+
+    set({ activeHint: null });
   },
 
-  syncSettings: async (user) => {
-    if (user) {
-      // Import dynamically to avoid circular dependencies if any
-      const { doc, getDoc } = await import('firebase/firestore');
-      const { db, OperationType, handleFirestoreError } = await import('../lib/firebase');
-      const path = `users/${user.uid}/settings/current`;
-      try {
-        const docRef = doc(db, 'users', user.uid, 'settings', 'current');
-        const docSnap = await getDoc(docRef);
-        if (docSnap.exists()) {
-          const s = docSnap.data();
-          set({
-            theme: s.theme || 'cosmic',
-            soundEnabled: s.soundEnabled ?? true,
-            hapticsEnabled: s.hapticsEnabled ?? true,
-            hapticIntensity: s.hapticIntensity || 'medium',
-            stats: s.stats || { gamesWon: 0, averageTime: 0, currentStreak: 0, totalGamesFinished: 0, fastestFinish: null, achievements: [] }
-          });
-          audio.enabled = s.soundEnabled ?? true;
-          haptic.enabled = s.hapticsEnabled ?? true;
-          haptic.intensity = s.hapticIntensity || 'medium';
-          audio.theme = s.theme || 'cosmic';
-          return;
-        }
-      } catch (e) {
-        console.error("Failed to load settings:", e);
-        handleFirestoreError(e, OperationType.GET, path);
-      }
-    } 
-    
-    // Fallback to local storage
-    if (typeof window !== 'undefined') {
-      try {
-        const localStatsRaw = localStorage.getItem('sudoku_stats');
-        const localSettingsRaw = localStorage.getItem('sudoku_settings');
-        
-        let stats = { gamesWon: 0, averageTime: 0, currentStreak: 0, totalGamesFinished: 0, fastestFinish: null, achievements: [] };
-        if (localStatsRaw) stats = JSON.parse(localStatsRaw);
-        
-        let s: any = {};
-        if (localSettingsRaw) s = JSON.parse(localSettingsRaw);
-        
-        set({ 
-          theme: s.theme || 'cosmic', 
-          soundEnabled: s.soundEnabled ?? true, 
-          hapticsEnabled: s.hapticsEnabled ?? true, 
-          hapticIntensity: s.hapticIntensity || 'medium',
-          stats: stats
-        });
-        audio.enabled = s.soundEnabled ?? true;
-        haptic.enabled = s.hapticsEnabled ?? true;
-        haptic.intensity = s.hapticIntensity || 'medium';
-        audio.theme = s.theme || 'cosmic';
-      } catch (e) {
-        console.error("Failed to load local settings:", e);
-      }
-    }
-  },
-
-  pushAnimationEvent: (event: AnimationEventInput) => {
-    const id = Date.now().toString() + '-' + Math.random().toString(36).substring(2, 9);
-    const createdAt = Date.now();
-    const newEvent = { ...event, id, createdAt } as AnimationEvent;
-    set((state) => ({
-      animationEvents: [...state.animationEvents, newEvent]
-    }));
-  },
-
-  clearAnimationEvent: (id) => {
-    set((state) => {
-      const remaining = state.animationEvents.filter(e => e.id !== id);
-      if (remaining.length === state.animationEvents.length) {
-        return {};
-      }
-      return { animationEvents: remaining };
-    });
-  },
-
-  clearOldAnimationEvents: (maxAgeMs) => {
-    const cutoff = Date.now() - maxAgeMs;
-    set((state) => {
-      const remaining = state.animationEvents.filter(e => e.createdAt >= cutoff);
-      if (remaining.length === state.animationEvents.length) {
-        return {};
-      }
-      return { animationEvents: remaining };
-    });
+  cancelHint: () => {
+    set({ activeHint: null });
   },
 
   undo: () => {
-    const { isPlaying, isPaused, isScanning, undoStack, board, mistakes, currentCombo, maxComboThisGame, lastComboMilestone, hintsUsed, redoStack } = get();
+    const { isPlaying, isPaused, isScanning, undoStack, board, mistakes, currentCombo, maxComboThisGame, lastComboMilestone, hintsUsed, redoStack, completedUnitKeys, mistakeShieldState } = get();
     if (!isPlaying || isPaused || isScanning || undoStack.length === 0) return;
 
     haptic.medium();
@@ -1008,7 +1231,6 @@ export const useGameStore = create<GameState>((set, get) => ({
     const previousStack = [...undoStack];
     const snapshot = previousStack.pop()!;
 
-    // Create current state snapshot to push onto redoStack
     const boardCopy = board.map(row =>
       row.map(cell => ({
         value: cell.value,
@@ -1025,7 +1247,16 @@ export const useGameStore = create<GameState>((set, get) => ({
       maxComboThisGame,
       lastComboMilestone,
       hintsUsed,
+      completedUnitKeys: [...completedUnitKeys],
+      mistakeShieldState
     };
+
+    let nextShieldState = snapshot.mistakeShieldState ?? 'locked';
+    if (mistakeShieldState === 'spent') {
+      nextShieldState = 'spent';
+    } else if (nextShieldState === 'armed' && snapshot.currentCombo < MISTAKE_SHIELD_UNLOCK_COMBO) {
+      nextShieldState = 'locked';
+    }
 
     set({
       board: snapshot.board,
@@ -1034,13 +1265,15 @@ export const useGameStore = create<GameState>((set, get) => ({
       maxComboThisGame: snapshot.maxComboThisGame,
       lastComboMilestone: snapshot.lastComboMilestone,
       hintsUsed: snapshot.hintsUsed !== undefined ? snapshot.hintsUsed : hintsUsed,
+      completedUnitKeys: snapshot.completedUnitKeys || [],
+      mistakeShieldState: nextShieldState,
       undoStack: previousStack,
       redoStack: [...redoStack, currentSnapshot]
     });
   },
 
   redo: () => {
-    const { isPlaying, isPaused, isScanning, redoStack, board, mistakes, currentCombo, maxComboThisGame, lastComboMilestone, hintsUsed, undoStack } = get();
+    const { isPlaying, isPaused, isScanning, redoStack, board, mistakes, currentCombo, maxComboThisGame, lastComboMilestone, hintsUsed, undoStack, completedUnitKeys, mistakeShieldState } = get();
     if (!isPlaying || isPaused || isScanning || redoStack.length === 0) return;
 
     haptic.medium();
@@ -1049,7 +1282,6 @@ export const useGameStore = create<GameState>((set, get) => ({
     const nextStack = [...redoStack];
     const snapshot = nextStack.pop()!;
 
-    // Create current snapshot to push to undoStack
     const boardCopy = board.map(row =>
       row.map(cell => ({
         value: cell.value,
@@ -1066,7 +1298,16 @@ export const useGameStore = create<GameState>((set, get) => ({
       maxComboThisGame,
       lastComboMilestone,
       hintsUsed,
+      completedUnitKeys: [...completedUnitKeys],
+      mistakeShieldState
     };
+
+    let nextShieldState = snapshot.mistakeShieldState ?? 'locked';
+    if (mistakeShieldState === 'spent') {
+      nextShieldState = 'spent';
+    } else if (nextShieldState === 'armed' && snapshot.currentCombo < MISTAKE_SHIELD_UNLOCK_COMBO) {
+      nextShieldState = 'locked';
+    }
 
     set({
       board: snapshot.board,
@@ -1075,44 +1316,134 @@ export const useGameStore = create<GameState>((set, get) => ({
       maxComboThisGame: snapshot.maxComboThisGame,
       lastComboMilestone: snapshot.lastComboMilestone,
       hintsUsed: snapshot.hintsUsed !== undefined ? snapshot.hintsUsed : hintsUsed,
+      completedUnitKeys: snapshot.completedUnitKeys || [],
+      mistakeShieldState: nextShieldState,
       undoStack: [...undoStack, currentSnapshot],
       redoStack: nextStack
     });
+  },
+
+  toggleSound: () => {
+    set((state) => ({ soundEnabled: !state.soundEnabled }));
+  },
+
+  toggleHaptics: () => {
+    set((state) => ({ hapticsEnabled: !state.hapticsEnabled }));
+  },
+
+  toggleFocusLens: () => {
+    set((state) => ({ focusLensEnabled: !state.focusLensEnabled }));
+  },
+
+  setHapticIntensity: (intensity) => {
+    set({ hapticIntensity: intensity });
+  },
+
+  setTheme: (theme) => {
+    set({ theme });
+  },
+
+  toggleStats: () => {
+    set((state) => ({ showStats: !state.showStats }));
+  },
+
+  syncSettings: async (user) => {
+    if (!user) return;
+    try {
+      const { db } = await import('../lib/firebase');
+      const { doc, getDoc, setDoc } = await import('firebase/firestore');
+      const docRef = doc(db, 'users', user.uid, 'settings', 'current');
+      
+      const docSnap = await getDoc(docRef);
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        set({
+          theme: data.theme || get().theme,
+          soundEnabled: data.soundEnabled !== undefined ? data.soundEnabled : get().soundEnabled,
+          hapticsEnabled: data.hapticsEnabled !== undefined ? data.hapticsEnabled : get().hapticsEnabled,
+          hapticIntensity: data.hapticIntensity || get().hapticIntensity,
+          focusLensEnabled: data.focusLensEnabled !== undefined ? data.focusLensEnabled : get().focusLensEnabled,
+          stats: data.stats || get().stats,
+        });
+      } else {
+        await setDoc(docRef, {
+          theme: get().theme,
+          soundEnabled: get().soundEnabled,
+          hapticsEnabled: get().hapticsEnabled,
+          hapticIntensity: get().hapticIntensity,
+          focusLensEnabled: get().focusLensEnabled,
+          stats: get().stats
+        }, { merge: true });
+      }
+    } catch (e) {
+      console.error("Error syncing settings with Firestore:", e);
+    }
+  },
+
+  pushAnimationEvent: (event: AnimationEventInput) => {
+    const newEvent: AnimationEvent = {
+      ...event,
+      id: Math.random().toString(36).substring(2, 11),
+      createdAt: Date.now()
+    };
+    set((state) => ({
+      animationEvents: [...state.animationEvents, newEvent]
+    }));
+  },
+
+  clearAnimationEvent: (id: string) => {
+    set((state) => ({
+      animationEvents: state.animationEvents.filter(e => e.id !== id)
+    }));
+  },
+
+  clearOldAnimationEvents: (maxAgeMs: number) => {
+    const now = Date.now();
+    set((state) => ({
+      animationEvents: state.animationEvents.filter(e => now - e.createdAt < maxAgeMs)
+    }));
   }
 }));
 
 useGameStore.subscribe((state, prevState) => {
   if (state.isPlaying && state.board.length === 9 && !state.isWon) {
-    // Only save when board/mistakes change or when timeElapsed hits a 10s mark to avoid excessive spam
     if (
       state.board !== prevState?.board || 
       state.mistakes !== prevState?.mistakes || 
+      state.mistakeShieldState !== prevState?.mistakeShieldState ||
       (state.timeElapsed !== prevState?.timeElapsed && state.timeElapsed % 10 === 0)
     ) {
       saveGameState({
         board: state.board,
         solution: state.solution,
         difficulty: state.difficulty,
+        gameKind: state.isDailyChallenge ? 'daily' : 'standard',
+        dailyDate: state.dailyChallengeDate,
+        dailyDifficulty: state.dailyChallengeDifficulty,
         mistakes: state.mistakes,
         timeElapsed: state.timeElapsed,
         hintsUsed: state.hintsUsed,
+        currentCombo: state.currentCombo,
+        maxComboThisGame: state.maxComboThisGame,
+        lastComboMilestone: state.lastComboMilestone,
+        completedUnitKeys: state.completedUnitKeys,
+        mistakeShieldState: state.mistakeShieldState,
       });
     }
   }
 
-  if (prevState && (state.theme !== prevState.theme || state.soundEnabled !== prevState.soundEnabled || state.hapticsEnabled !== prevState.hapticsEnabled || state.hapticIntensity !== prevState.hapticIntensity || state.stats !== prevState.stats)) {
-    // Store locally to support guest play or offline caching
+  if (prevState && (state.theme !== prevState.theme || state.soundEnabled !== prevState.soundEnabled || state.hapticsEnabled !== prevState.hapticsEnabled || state.hapticIntensity !== prevState.hapticIntensity || state.stats !== prevState.stats || state.focusLensEnabled !== prevState.focusLensEnabled)) {
     if (typeof window !== 'undefined') {
       localStorage.setItem('sudoku_stats', JSON.stringify(state.stats));
       localStorage.setItem('sudoku_settings', JSON.stringify({
         theme: state.theme,
         soundEnabled: state.soundEnabled,
         hapticsEnabled: state.hapticsEnabled,
-        hapticIntensity: state.hapticIntensity
+        hapticIntensity: state.hapticIntensity,
+        focusLensEnabled: state.focusLensEnabled
       }));
     }
 
-    // dynamically import
     import('../lib/firebase').then(({ auth, db, OperationType, handleFirestoreError }) => {
       const user = auth.currentUser;
       if (user) {
@@ -1123,6 +1454,7 @@ useGameStore.subscribe((state, prevState) => {
             soundEnabled: state.soundEnabled,
             hapticsEnabled: state.hapticsEnabled,
             hapticIntensity: state.hapticIntensity,
+            focusLensEnabled: state.focusLensEnabled,
             stats: state.stats
           }, { merge: true }).catch((e) => {
             console.error(e);

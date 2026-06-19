@@ -43,6 +43,37 @@ export function getCandidates(board: number[][], row: number, col: number): numb
   return candidates;
 }
 
+export function getLegalCandidates(board: any[][], row: number, col: number): number[] {
+  const numGrid = board.map(r =>
+    r.map(c => {
+      if (c && typeof c === 'object') {
+        return c.isError ? 0 : (c.value || 0);
+      }
+      return typeof c === 'number' ? c : 0;
+    })
+  );
+
+  const present = new Array(10).fill(false);
+  for (let x = 0; x < 9; x++) {
+    present[numGrid[row][x]] = true;
+    present[numGrid[x][col]] = true;
+  }
+  const startRow = Math.floor(row / 3) * 3;
+  const startCol = Math.floor(col / 3) * 3;
+  for (let i = 0; i < 3; i++) {
+    for (let j = 0; j < 3; j++) {
+      present[numGrid[startRow + i][startCol + j]] = true;
+    }
+  }
+  const candidates: number[] = [];
+  for (let num = 1; num <= 9; num++) {
+    if (!present[num]) {
+      candidates.push(num);
+    }
+  }
+  return candidates;
+}
+
 export function findMRVCell(board: number[][]): { row: number; col: number; candidates: number[] } | null {
   let minCandidates: number[] | null = null;
   let bestRow = -1;

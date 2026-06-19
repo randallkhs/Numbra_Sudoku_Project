@@ -62,7 +62,7 @@ export const DailyChallengeModal: React.FC<DailyChallengeModalProps> = ({ onClos
 Difficulty: ${formattedDiff}
 Played as: ${result.isPractice ? 'Practice Replay' : 'Official Challenge'}
 Time: ${formatTime(result.timeElapsed)}
-Mistakes: ${result.mistakes}/3
+Mistakes: ${result.mistakes}
 Hints Used: ${result.hintsUsed}${flowText}${streakText}
 Play here: ${window.location.origin}`;
 
@@ -231,7 +231,7 @@ Play here: ${window.location.origin}`;
                   <span className="text-[9px] text-game-text-secondary mb-0.5">MISTAKES</span>
                   <span className="font-bold text-game-text-primary flex items-center gap-1.5">
                     <AlertTriangle size={12} className="text-game-accent-light" />
-                    {prevResult.mistakes}/3
+                    {prevResult.mistakes}
                   </span>
                 </div>
                 <div className="bg-white/[0.02] p-2.5 rounded-xl border border-white/5 flex flex-col">
